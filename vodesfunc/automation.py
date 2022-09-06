@@ -11,13 +11,14 @@ from pytimeconv import Convert
 from configparser import ConfigParser
 from typing import Optional, Tuple, List, Callable, TypeVar
 
-from .auto import check
-from .auto import muxing
-from .auto.muxing import (VT, AT, ST, VideoTrack, AudioTrack, SubTrack, Attachment, GlobSearch, TrackType)
 
 PathLike = TypeVar("PathLike", str, Path)
 Trim = Tuple[Optional[int], Optional[int]]
 Zone = Tuple[int, int, float | str, Optional[str]]
+
+from .auto import check
+from .auto import muxing
+from .auto.muxing import (VT, AT, ST, VideoTrack, AudioTrack, SubTrack, Attachment, GlobSearch, TrackType)
 
 _exPrefix = 'vodesfunc.automation.'
 
@@ -384,7 +385,7 @@ class Chapters():
     def set_names(self, names: List[Optional[str]]):
         old: List[str] = [chapter[1] for chapter in self.chapters]
         if len(names) > len(old):
-            raise ValueError(f'{self.__class__.__name__}: too many names!')
+            raise ValueError(f'Chapters: too many names!')
         if len(names) < len(old):
             names += [None] * (len(old) - len(names))
 
