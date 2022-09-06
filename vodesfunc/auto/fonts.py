@@ -457,6 +457,7 @@ def validate_and_save_fonts(ass_doc: Tuple[str, ass.Document], out_dir: str | pa
         current = pathlib.Path(font.fontfile)
         future_name = font.postscript_name.strip() + current.suffix
         dest = os.path.join(out_dir, future_name)
-        shutil.copyfile(current, dest)
-        print(f'Copied font "{future_name}"')
+        if not os.path.exists(dest):
+            shutil.copyfile(current, dest)
+            print(f'Copied font "{future_name}"')
 
