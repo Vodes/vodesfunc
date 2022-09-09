@@ -2,10 +2,17 @@
     WIP, kinda demotivated to do this shit
 """
 
-from time import sleep
 from datetime import datetime
-from StringProgressBar import progressBar
+from time import sleep
+
 from discord_webhook import DiscordEmbed, DiscordWebhook
+from StringProgressBar import progressBar
+
+
+__all__: list[str] = [
+    'Webhook',
+]
+
 
 class Webhook:
 
@@ -16,24 +23,24 @@ class Webhook:
     last_updated: datetime
     prev_progress: int = 0
     discord_webhook: DiscordWebhook
-    
+
     def __init__(self, url: str, show_name: str, episode: str) -> None:
         self.url = url
         self.show_name = show_name
         self.episode = episode
-        discord_webhook = DiscordWebhook(self.url, content = "Initializing...")
+        discord_webhook = DiscordWebhook(self.url, content="Initializing...")
         sleep(10)
         self.sent = discord_webhook.execute()
-    
+
     def update_message(self, process: str = 'Encode', details: str = "", fields: dict = {}, progress: int = 0, total: int = 0) -> bool | None:
         now = datetime.now()
         if ((self.last_updated.second + 5) < now.second) or self.sent is None:
             return None
-        
-        bar = progressBar().filledBar(total = total, current = progress, size = 80)
+
+        bar = progressBar().filledBar(total=total, current=progress, size=80)
 
         self.discord_webhook.content = ""
-        
+
         self.discord_webhook.remove_embeds()
         embed = DiscordEmbed(self.show_name + " - " + self.episode)
         embed.set_author(process + " running...")

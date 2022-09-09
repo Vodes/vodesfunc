@@ -2,8 +2,9 @@
     Oh god no
 """
 
-from . import (automation, misc, scale, util)
+# flake8: noqa
 
+from . import automation, misc, scale, util
 from .automation import *
 from .misc import *
 from .scale import *

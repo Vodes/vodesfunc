@@ -1,19 +1,24 @@
 """
 A collection of functions to make me embrace my laziness
 """
+import random
+from functools import partial
+from typing import Any
+
+import awsmfunc as awf
+import lvsfunc as lvf
 import vapoursynth as vs
+from vsutil import depth, get_y
+
 core = vs.core
 
-from typing import List
-import lvsfunc as lvf
-from functools import partial
-import awsmfunc as awf
-import random
-from vsutil import depth, iterate, iterate, get_y
 
 # Anything else
 
-def dirty_prop_set(clip: vs.VideoNode, threshold: int = 1100, luma_scaling: int = 24, prop_name: str = None, src_prop_val: any = None, bbm_prop_val: any = None, debug_output: bool = False) -> List[vs.VideoNode]:
+
+def dirty_prop_set(clip: vs.VideoNode, threshold: int = 1100, luma_scaling: int = 24, prop_name: str = None,
+                   src_prop_val: Any = None, bbm_prop_val: any = None, debug_output: bool = False
+                   ) -> list[vs.VideoNode]:
     """
     Dirty-edge-based frameprop setting function using bbm, a brightness difference check and a brightness scaling
     (might be a very specific usecase)
@@ -22,7 +27,7 @@ def dirty_prop_set(clip: vs.VideoNode, threshold: int = 1100, luma_scaling: int 
 
     An example for this would be my tanya script:
         Only 720p frames have dirty edges so write a 720 prop if dirty edges are detected.
-        
+
         dirty_prop_set(.., prop_name = 'Rescale', src_prop_val = 812, bbm_prop_val = 720)
     """
     def _select_frame(n: int, f: vs.VideoFrame, clip_a: vs.VideoNode, clip_b: vs.VideoNode) -> vs.VideoNode:
@@ -42,11 +47,14 @@ def dirty_prop_set(clip: vs.VideoNode, threshold: int = 1100, luma_scaling: int 
     mask = get_y(core.std.FrameEval(clip, partial(_get_mask, clip_a=clip, clip_b=bbm), clip)).std.PlaneStats()
 
     if(isinstance(src_prop_val, int) and isinstance(bbm_prop_val, int)):
-        bbm_prop, src_prop = [c.std.SetFrameProp(prop=prop_name, intval=i) for c, i in zip([bbm, clip], [bbm_prop_val, src_prop_val])]
+        bbm_prop, src_prop = [c.std.SetFrameProp(prop=prop_name, intval=i)
+                              for c, i in zip([bbm, clip], [bbm_prop_val, src_prop_val])]
     else:
-        bbm_prop, src_prop = [c.std.SetFrameProp(prop=prop_name, data=i) for c, i in zip([bbm, clip], [str(bbm_prop_val), str(src_prop_val)])]
+        bbm_prop, src_prop = [c.std.SetFrameProp(prop=prop_name, data=i)
+                              for c, i in zip([bbm, clip], [str(bbm_prop_val), str(src_prop_val)])]
 
     return [core.std.FrameEval(clip, partial(_select_frame, clip_a=src_prop, clip_b=bbm_prop), prop_src=mask), mask]
+
 
 def lazylist(clip: vs.VideoNode, dark_frames: int = 8, light_frames: int = 4, seed: int = 20202020, diff_thr: int = 15):
     """

@@ -1,29 +1,47 @@
-import collections
-import io
-import itertools
-import os.path
-import pathlib
 import logging
+import os
 import re
 import shutil
 import sys
-from typing import List, Tuple
-import shlex
-import zlib
-import os
+from collections import defaultdict, namedtuple
+from io import BytesIO
+from itertools import groupby
+from pathlib import Path
 
 import ass
 import ebmlite
 import fontTools
-from fontTools.ttLib import ttFont
 from fontTools.misc import encodingTools
+from fontTools.ttLib import ttFont
+
+__all__: list[str] = [
+    '_HOME',
+    'disable_logging',
+    'FONT_MIMETYPES',
+    'Font', 'FontCollection',
+    'get_dicts',
+    'get_element', 'get_elements',
+    'get_fonts',
+    'getFontDirs',
+    'INT_PATTERN',
+    'is_mkv',
+    'LINE_PATTERN',
+    'LinuxFontDirs', 'OSxFontDirs', 'WinFontDirs',
+    'parse_int', 'parse_line', 'parse_tags', 'parse_text',
+    'State',
+    'strip_fontname',
+    'TAG_PATTERN',
+    'TEXT_WHITESPACE_PATTERN',
+    'validate_and_save_fonts', 'validate_fonts',
+]
 
 TAG_PATTERN = re.compile(r"\\\s*([^(\\]+)(?<!\s)\s*(?:\(\s*([^)]+)(?<!\s)\s*)?")
 INT_PATTERN = re.compile(r"^[+-]?\d+")
 LINE_PATTERN = re.compile(r"(?:\{(?P<tags>[^}]*)\}?)?(?P<text>[^{]*)")
 TEXT_WHITESPACE_PATTERN = re.compile(r"\\[nNh]")
 
-State = collections.namedtuple("State", ["font", "italic", "weight", "drawing"])
+State = namedtuple("State", ["font", "italic", "weight", "drawing"])
+
 
 def parse_int(s):
     if match := INT_PATTERN.match(s):
@@ -31,11 +49,13 @@ def parse_int(s):
     else:
         return 0
 
+
 def strip_fontname(s):
     if s.startswith('@'):
         return s[1:]
     else:
         return s
+
 
 def parse_tags(s, state, line_style, styles):
     for match in TAG_PATTERN.finditer(s):
@@ -51,7 +71,6 @@ def parse_tags(s, state, line_style, styles):
                 return args
             else:
                 return None
-
 
         if (args := get_tag("fn")) is not None:
             if len(args) == 0:
@@ -93,8 +112,10 @@ def parse_tags(s, state, line_style, styles):
 
     return state
 
+
 def parse_text(text):
     return TEXT_WHITESPACE_PATTERN.sub(' ', text)
+
 
 def parse_line(line, line_style, styles):
     state = line_style
@@ -106,7 +127,7 @@ def parse_line(line, line_style, styles):
 
 
 class Font:
-    def __init__(self, fontfile, font_number=0, debug = False):
+    def __init__(self, fontfile, font_number=0, debug=False):
         self.fontfile = fontfile
         self.font = ttFont.TTFont(fontfile, fontNumber=font_number)
         self.num_fonts = getattr(self.font.reader, "numFonts", 1)
@@ -148,7 +169,7 @@ class Font:
         # fail early if glyph tables can't be accessed
         self.missing_glyphs('', debug)
 
-    def missing_glyphs(self, text, debug = False):
+    def missing_glyphs(self, text, debug=False):
         if (uniTable := self.font.getBestCmap()):
             return [c for c in text
                     if ord(c) not in uniTable]
@@ -176,7 +197,7 @@ class FontCollection:
         self.fonts = []
         for name, f in fontfiles:
             try:
-                font = Font(f, debug = debug)
+                font = Font(f, debug=debug)
                 self.fonts.append(font)
 
                 if font.num_fonts > 1:
@@ -190,10 +211,10 @@ class FontCollection:
                         for font in self.fonts
                         for name in font.exact_names}
         self.by_postscriptName = {name.lower(): font
-                                    for font in self.fonts
-                                    for name in [font.postscript_name]}
+                                  for font in self.fonts
+                                  for name in [font.postscript_name]}
         self.by_family = {name.lower(): [font for (_, font) in fonts]
-                          for name, fonts in itertools.groupby(
+                          for name, fonts in groupby(
                               sorted([(family, font)
                                       for font in self.fonts
                                       for family in font.family_names],
@@ -204,16 +225,16 @@ class FontCollection:
         return abs(state.weight - font.weight) + abs(state.italic * 100 - font.slant)
 
     def _match(self, state):
-        #if not os.path.exists('Test.txt'):
-         #   with(open('Text.txt', 'w', encoding = 'utf-8') as t):
-          #      t.write(str(self.by_postscriptName))
+        # if not os.path.exists('Test.txt'):
+        #   with(open('Text.txt', 'w', encoding = 'utf-8') as t):
+        #      t.write(str(self.by_postscriptName))
         if (exact := self.by_full.get(state.font)):
             return exact, True
         elif (family := self.by_family.get(state.font)):
-            #print('Test')
+            # print('Test')
             return min(family, key=lambda font: self.similarity(state, font)), False
         else:
-            #print('None')
+            # print('None')
             return None, False
 
     def match(self, state):
@@ -228,14 +249,14 @@ class FontCollection:
 
 def validate_fonts(doc, fonts, ignore_drawings=False, warn_on_exact=False, debug=False):
     report = {
-        "should_copy": collections.defaultdict(set),
-        "missing_font": collections.defaultdict(set),
-        "missing_glyphs": collections.defaultdict(set),
-        "missing_glyphs_lines": collections.defaultdict(set),
-        "faux_bold": collections.defaultdict(set),
-        "faux_italic": collections.defaultdict(set),
-        "mismatch_bold": collections.defaultdict(set),
-        "mismatch_italic": collections.defaultdict(set)
+        "should_copy": defaultdict(set),
+        "missing_font": defaultdict(set),
+        "missing_glyphs": defaultdict(set),
+        "missing_glyphs_lines": defaultdict(set),
+        "faux_bold": defaultdict(set),
+        "faux_italic": defaultdict(set),
+        "mismatch_bold": defaultdict(set),
+        "mismatch_italic": defaultdict(set)
     }
 
     styles = {style.name: State(strip_fontname(style.fontname), style.italic, 700 if style.bold else 400, False)
@@ -296,13 +317,13 @@ def validate_fonts(doc, fonts, ignore_drawings=False, warn_on_exact=False, debug
     for font, lines in sorted(report["missing_font"].items(), key=lambda x: x[0]):
         issues += 1
         print(f"- {font}\non line(s): {format_lines(lines)}\n")
-    
+
     if len(report["missing_font"].items()) > 0:
         print("-------------------------------------\n")
 
     for (font, reqweight, realweight), lines in sorted(report["faux_bold"].items(), key=lambda x: x[0]):
         issues += 1
-        print(f"- Faux bold used for font {font} (requested weight {reqweight}, got {realweight}) " \
+        print(f"- Faux bold used for font {font} (requested weight {reqweight}, got {realweight}) "
               f"on line(s): {format_lines(lines)}")
 
     for font, lines in sorted(report["faux_italic"].items(), key=lambda x: x[0]):
@@ -311,33 +332,34 @@ def validate_fonts(doc, fonts, ignore_drawings=False, warn_on_exact=False, debug
 
     for (font, reqweight, realweight), lines in sorted(report["mismatch_bold"].items(), key=lambda x: x[0]):
         issues += 1
-        print(f"- Requested weight {reqweight} but got {realweight} for font {font} " \
+        print(f"- Requested weight {reqweight} but got {realweight} for font {font} "
               f"on line(s): {format_lines(lines)}")
 
     for font, lines in sorted(report["mismatch_italic"].items(), key=lambda x: x[0]):
         issues += 1
-        print(f"- Requested non-italic but got italic for font {font} on line(s): " + \
-              format_lines(lines))
+        print(f"- Requested non-italic but got italic for font {font} on line(s): "
+              + format_lines(lines))
 
     for font, lines in sorted(report["missing_glyphs_lines"].items(), key=lambda x: x[0]):
         issues += 1
         missing = ' '.join(f'{g}(U+{ord(g):04X})' for g in sorted(report['missing_glyphs'][font]))
-        print(f"- Font {font} is missing glyphs {missing} " \
+        print(f"- Font {font} is missing glyphs {missing} "
               f"on line(s): {format_lines(lines)}")
 
     print(f"{issues} issue(s) found")
     return issues > 0, report
 
 
-
 def get_element(parent, element, id=False):
     return next(get_elements(parent, element, id=id))
+
 
 def get_elements(parent, *element, id=False):
     if id:
         return filter(lambda x: x.id in element, parent)
     else:
         return filter(lambda x: x.name in element, parent)
+
 
 def get_dicts(parent, element, id=False):
     return ({x.name: x for x in elem} for elem in get_elements(parent, element, id=id))
@@ -356,20 +378,22 @@ FONT_MIMETYPES = {
     b"font/ttf"
 }
 
+
 def get_fonts(mkv):
     fonts = []
 
     for segment in get_elements(mkv, "Segment"):
         for attachments in get_elements(segment, "Attachments"):
             for attachment in get_dicts(attachments, "AttachedFile"):
-                if pathlib.Path(attachment['FileName'].value.lower()).suffix not in ('.otf', '.ttf'):
+                if Path(attachment['FileName'].value.lower()).suffix not in ('.otf', '.ttf'):
                     print(f"Ignoring non-font attachment {attachment['FileName'].value}")
                     continue
 
                 fonts.append((attachment["FileName"].value,
-                              io.BytesIO(attachment["FileData"].value)))
+                              BytesIO(attachment["FileData"].value)))
 
     return fonts
+
 
 def is_mkv(filename):
     with open(filename, 'rb') as f:
@@ -377,9 +401,9 @@ def is_mkv(filename):
 
 
 try:
-    _HOME = pathlib.Path.home()
+    _HOME = Path.home()
 except Exception:
-    _HOME = pathlib.Path(os.devnull)
+    _HOME = Path(os.devnull)
 
 LinuxFontDirs = [
     # old x11 dirs
@@ -394,7 +418,7 @@ LinuxFontDirs = [
     os.path.join(_HOME, ".fonts"),
 ]
 
-OSxFontDirs  = [
+OSxFontDirs = [
     # System
     "/Library/Fonts/",
     "/Network/Library/Fonts/",
@@ -411,7 +435,8 @@ WinFontDirs = [
     os.path.join(os.getenv("LOCALAPPDATA"), "Microsoft", "Windows", "Fonts")
 ]
 
-def getFontDirs() -> List[str]:
+
+def getFontDirs() -> list[str]:
     if sys.platform == 'win32':
         fontpaths = WinFontDirs
     else:
@@ -421,43 +446,46 @@ def getFontDirs() -> List[str]:
             fontpaths = LinuxFontDirs
     return fontpaths
 
+
 def disable_logging():
     logging.getLogger(fontTools.__name__).setLevel(logging.CRITICAL)
-    
 
-def validate_and_save_fonts(ass_doc: Tuple[str, ass.Document], out_dir: str | pathlib.Path, font_sources: List[str | pathlib.Path] | Tuple[str | pathlib.Path] = None, debug: bool = False):
+
+def validate_and_save_fonts(ass_doc: tuple[str, ass.Document], out_dir: str | Path,
+                            font_sources: list[str | Path] | tuple[str | Path] = None,
+                            debug: bool = False):
     if not debug:
         disable_logging()
-    out_dir = out_dir if isinstance(out_dir, pathlib.Path) else pathlib.Path(out_dir)
+    out_dir = out_dir if isinstance(out_dir, Path) else Path(out_dir)
     fontlist = []
     fontdirs = [os.getcwd()]
     if font_sources:
         for source in font_sources:
-            fontdirs.append(str(source.resolve()) if isinstance(source, pathlib.Path) else source)
+            fontdirs.append(str(source.resolve()) if isinstance(source, Path) else source)
     fontdirs.extend(getFontDirs())
     print(f'Parsing all available fonts...')
 
     for additional_fonts in fontdirs:
-        path = pathlib.Path(additional_fonts)
+        path = Path(additional_fonts)
         if path.is_dir():
-            fontlist.extend((p.name, str(p)) for p in path.rglob('*') if p.is_file() and p.suffix.lower() in ('.otf', '.ttf'))
+            fontlist.extend((p.name, str(p)) for p in path.rglob(
+                '*') if p.is_file() and p.suffix.lower() in ('.otf', '.ttf'))
         elif is_mkv(additional_fonts):
             schema = ebmlite.loadSchema("matroska.xml")
             fontmkv = schema.load(additional_fonts)
             fontlist.extend(get_fonts(fontmkv))
         else:
             fontlist.append((path.name, additional_fonts))
-    
+
     fonts = FontCollection(fontlist, debug)
     print(f'Checking {ass_doc[0]} ...')
     validate = validate_fonts(ass_doc[1], fonts, False, False, debug)
     print('')
 
-    for font, lines in validate[1]["should_copy"].items():
-        current = pathlib.Path(font.fontfile)
+    for font, _ in validate[1]["should_copy"].items():
+        current = Path(font.fontfile)
         future_name = font.postscript_name.strip() + current.suffix
         dest = os.path.join(out_dir, future_name)
         if not os.path.exists(dest):
             shutil.copyfile(current, dest)
             print(f'Copied font "{future_name}"')
-

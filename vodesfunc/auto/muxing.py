@@ -1,8 +1,6 @@
-from ast import Global
 from enum import IntEnum
-from genericpath import isfile
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import Optional
 import os
 
 import ass
@@ -11,10 +9,22 @@ from ..automation import PathLike
 
 _exPrefix = 'vodesfunc.automation.muxing:'
 
-Paths = PathLike | List[PathLike]
+__all__: list[str] = [
+    '_track',
+    'Attachment',
+    'AudioTrack', 'AT',
+    'Chapter',
+    'GlobSearch',
+    'make_iterable',
+    'MkvTrack',
+    'SubTrack', 'ST',
+    'TrackType',
+    'VideoTrack', 'VT',
+]
 
 # Start Frame, Optional Name
-Chapter = Tuple[int, Optional[str]]
+Chapter = tuple[int, Optional[str]]
+
 
 class TrackType(IntEnum):
     VIDEO = 1
@@ -24,9 +34,10 @@ class TrackType(IntEnum):
     CHAPTERS = 5
     MKV = 6
 
+
 class GlobSearch():
 
-    paths: Path | List[Path] = None
+    paths: Path | list[Path] = None
 
     def __init__(self, pattern: str, allow_multiple: bool = False, dir: PathLike = None, recursive: bool = True) -> None:
         """
@@ -37,23 +48,24 @@ class GlobSearch():
             :param dir:             Directory to run the search in. Defaults to current working dir.
             :param recursive:       Search recursively
         """
-        
+
         dir = Path(dir) if isinstance(dir, str) else dir
         if dir is None:
             dir = Path(os.getcwd()).resolve()
 
         search = dir.rglob(pattern) if recursive else dir.glob(pattern)
-        #print(search)
+        # print(search)
         for f in search:
             if allow_multiple:
                 if self.paths:
                     self.paths.append(f)
                 else:
-                    init: List[Path] = [f,]
+                    init: list[Path] = [f, ]
                     self.paths = init
             else:
                 self.paths = f
                 break
+
 
 class _track():
 
@@ -84,7 +96,7 @@ class _track():
         # as ffmpeg expects 3 letter codes; I am not sure what mkvmerge wants or can work with
         self.lang = lang
         self.type = type if isinstance(type, TrackType) \
-            else (TrackType(type) if isinstance(type, int) else TrackType[type.upper()])  
+            else (TrackType(type) if isinstance(type, int) else TrackType[type.upper()])
 
     def mkvmerge_args(self) -> str:
         if self.type == TrackType.ATTACHMENT:
@@ -106,14 +118,17 @@ class _track():
         forced_args = f' --forced-display-flag 0:{"yes" if self.forced else "no"}'
         return f'{name_args}{lang_args}{default_args}{forced_args}{delay_args} "{self.file.resolve()}"'
 
+
 class VideoTrack(_track):
     """
         _track object with VIDEO type preselected and japanese language default
     """
+
     def __init__(self, file: PathLike | GlobSearch, name: str = '', lang: str = 'ja', default: bool = True, forced: bool = False, delay: int = 0) -> None:
         if isinstance(file, GlobSearch):
-            file = file.paths[0] if isinstance(file.paths, List) else file.paths
+            file = file.paths[0] if isinstance(file.paths, list) else file.paths
         super().__init__(file, TrackType.VIDEO, name, lang, default, forced, delay)
+
 
 class AudioTrack(_track):
     """
@@ -122,8 +137,9 @@ class AudioTrack(_track):
 
     def __init__(self, file: PathLike | GlobSearch, name: str = '', lang: str = 'ja', default: bool = True, forced: bool = False, delay: int = 0) -> None:
         if isinstance(file, GlobSearch):
-            file = file.paths[0] if isinstance(file.paths, List) else file.paths
+            file = file.paths[0] if isinstance(file.paths, list) else file.paths
         super().__init__(file, TrackType.AUDIO, name, lang, default, forced, delay)
+
 
 class Attachment(_track):
     """
@@ -137,25 +153,26 @@ class Attachment(_track):
 class SubTrack(_track):
     """
         _track object with SUB type preselected and english language default
-        
+
         Supports merging multiple files by passing a List of Path objects or filepath strings
         and of course also a GlobSearch
     """
 
-    def __init__(self, file: PathLike | List[PathLike] | GlobSearch, name: str = '', lang: str = 'en', default: bool = True, forced: bool = False, delay: int = 0) -> None:
+    def __init__(self, file: PathLike | list[PathLike] | GlobSearch, name: str = '', lang: str = 'en',
+                 default: bool = True, forced: bool = False, delay: int = 0) -> None:
         if isinstance(file, GlobSearch):
             file = file.paths
-        
+
         # Merge if multiple sub files
-        if isinstance(file, List):
+        if isinstance(file, list):
             ffs_python = f'for track "{name}"'
             print(f'Merging subtitle files {ffs_python if name else ""}...')
-            ass_documents: List[ass.Document] = []
+            ass_documents: list[ass.Document] = []
             for ass_file in file:
                 ass_file = ass_file if isinstance(ass_file, Path) else Path(ass_file)
                 with open(ass_file, 'r', encoding='utf_8_sig') as read:
                     ass_documents.append(ass.parse(read))
-                    
+
             merged = ass_documents[0]
             existing_styles = [style.name for style in (merged.styles)]
             ass_documents.remove(merged)
@@ -173,34 +190,36 @@ class SubTrack(_track):
             outdir = os.path.join(os.getcwd(), '_workdir')
             if os.path.exists(outdir):
                 merge_dir = os.path.join(outdir, 'merged')
-                Path(merge_dir).mkdir(exist_ok = True)
+                Path(merge_dir).mkdir(exist_ok=True)
                 outdir = merge_dir
             else:
                 outdir = os.getcwd()
 
             out_file = Path(os.path.join(outdir, f'{Path(file[0]).stem}-merged.ass'))
-            with open(out_file, 'w', encoding = 'utf_8_sig') as merge_write:
+            with open(out_file, 'w', encoding='utf_8_sig') as merge_write:
                 merged.dump_file(merge_write)
-            
+
             file = out_file
             print('Done.\n')
-        
-        # TODO: Daiz Autoswapper Functionality like subkt see https://github.com/Myaamori/SubKt/blob/master/src/main/kotlin/myaa/subkt/tasks/asstasks.kt#L606 
+
+        # TODO: Daiz Autoswapper Functionality like subkt see https://github.com/Myaamori/SubKt/blob/master/src/main/kotlin/myaa/subkt/tasks/asstasks.kt#L606
 
         super().__init__(file, TrackType.SUB, name, lang, default, forced, delay)
-    
-    def collect_fonts(self, work_dir: Path, font_sources: List[str | Path] = None, debug_output: bool = False) -> List[Attachment]:
+
+    def collect_fonts(self, work_dir: Path, font_sources: list[str | Path] = None,
+                      debug_output: bool = False) -> list[Attachment]:
         """
             Validates and copies the fonts needed for this track into the specified `work_dir`.
             `font_sources` can be mkv files or directories.
 
             Returns a list of Attachment tracks you can feed into Mux()
         """
-        out: List[Attachment] = []
+        out: list[Attachment] = []
         doc: ass.Document = None
         with open(self.file, 'r', encoding='utf_8_sig') as read:
             doc = ass.parse(read)
-        validate_and_save_fonts([f'track "{self.name}"' if self.name else self.file.stem, doc], work_dir, font_sources, debug_output)
+        validate_and_save_fonts([f'track "{self.name}"' if self.name else self.file.stem,
+                                doc], work_dir, font_sources, debug_output)
         for f in os.listdir(work_dir):
             filepath = Path(os.path.join(work_dir, f))
             if filepath.suffix.lower() in ['.ttf', '.otf']:
@@ -208,15 +227,17 @@ class SubTrack(_track):
 
         return out
 
+
 class MkvTrack(_track):
-    
+
     def __init__(self, file: PathLike | GlobSearch, mkvmerge_args: str = '') -> None:
         if isinstance(file, GlobSearch):
-            file = file.paths[0] if isinstance(file.paths, List) else file.paths
+            file = file.paths[0] if isinstance(file.paths, list) else file.paths
         super().__init__(file, TrackType.MKV, mkvmerge_args, '', False, False, 0)
 
+
 def make_iterable(thing: any) -> any:
-    if isinstance(thing, List):
+    if isinstance(thing, list):
         out = []
         for entry in thing:
             if isinstance(entry, PathLike):
@@ -225,6 +246,7 @@ def make_iterable(thing: any) -> any:
         return [out]
     else:
         return [thing, ]
+
 
 VT = VideoTrack
 AT = AudioTrack
