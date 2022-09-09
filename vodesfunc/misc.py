@@ -1,12 +1,10 @@
 """
 A collection of functions to make me embrace my laziness
 """
-import random
 from functools import partial
 from typing import Any
 
 import awsmfunc as awf
-import lvsfunc as lvf
 import vapoursynth as vs
 from vsutil import depth, get_y
 
@@ -54,86 +52,3 @@ def dirty_prop_set(clip: vs.VideoNode, threshold: int = 1100, luma_scaling: int 
                               for c, i in zip([bbm, clip], [str(bbm_prop_val), str(src_prop_val)])]
 
     return [core.std.FrameEval(clip, partial(_select_frame, clip_a=src_prop, clip_b=bbm_prop), prop_src=mask), mask]
-
-
-def lazylist(clip: vs.VideoNode, dark_frames: int = 8, light_frames: int = 4, seed: int = 20202020, diff_thr: int = 15):
-    """
-    Blame Sea for what this shits out
-
-    A function for generating a list of frames for comparison purposes.
-    Works by running `core.std.PlaneStats()` on the input clip,
-    iterating over all frames, and sorting all frames into 2 lists
-    based on the PlaneStatsAverage value of the frame.
-    Randomly picks frames from both lists, 8 from `dark` and 4
-    from `light` by default.
-    :param clip:          Input clip
-    :param dark_frame:    Number of dark frames
-    :param light_frame:   Number of light frames
-    :param seed:          seed for `random.sample()`
-    :param diff_thr:      Minimum distance between each frames (In seconds)
-    :return:              List of dark and light frames
-    """
-
-    dark = []
-    light = []
-
-    def checkclip(n, f, clip):
-
-        avg = f.props["PlaneStatsAverage"]
-
-        if 0.062746 <= avg <= 0.380000:
-            dark.append(n)
-
-        elif 0.450000 <= avg <= 0.800000:
-            light.append(n)
-
-        return clip
-
-    s_clip = clip.std.PlaneStats()
-
-    eval_frames = vs.core.std.FrameEval(
-        clip, partial(checkclip, clip=s_clip), prop_src=s_clip
-    )
-    lvf.clip_async_render(eval_frames)
-
-    dark.sort()
-    light.sort()
-
-    dark_dedupe = [dark[0]]
-    light_dedupe = [light[0]]
-
-    thr = round(clip.fps_num / clip.fps_den * diff_thr)
-    lastvald = dark[0]
-    lastvall = light[0]
-
-    for i in range(1, len(dark)):
-
-        checklist = dark[0:i]
-        x = dark[i]
-
-        for y in checklist:
-            if x >= y + thr and x >= lastvald + thr:
-                dark_dedupe.append(x)
-                lastvald = x
-                break
-
-    for i in range(1, len(light)):
-
-        checklist = light[0:i]
-        x = light[i]
-
-        for y in checklist:
-            if x >= y + thr and x >= lastvall + thr:
-                light_dedupe.append(x)
-                lastvall = x
-                break
-
-    if len(dark_dedupe) > dark_frames:
-        random.seed(seed)
-        dark_dedupe = random.sample(dark_dedupe, dark_frames)
-
-    if len(light_dedupe) > light_frames:
-        random.seed(seed)
-        light_dedupe = random.sample(light_dedupe, light_frames)
-
-    return dark_dedupe + light_dedupe
