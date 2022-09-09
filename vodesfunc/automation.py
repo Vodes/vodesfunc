@@ -1,29 +1,39 @@
 import os
 import re
-import subprocess
-import numpy as np
 import shutil as sh
-import vapoursynth as vs
-from pathlib import Path
+import subprocess
+from configparser import ConfigParser
 from fractions import Fraction
+from pathlib import Path
+from typing import Callable
+
+import numpy as np
+import vapoursynth as vs
 from pyparsebluray import mpls
 from pytimeconv import Convert
-from configparser import ConfigParser
-from typing import Optional, Tuple, List, Callable, TypeVar
 
-
-PathLike = TypeVar("PathLike", str, Path)
-Trim = Tuple[Optional[int], Optional[int]]
-Zone = Tuple[int, int, float | str, Optional[str]]
-
-from .auto import check
-from .auto import muxing
-from .auto.muxing import (VT, AT, ST, VideoTrack, AudioTrack, SubTrack, Attachment, GlobSearch, TrackType)
+from .auto import check, muxing
+from .auto.muxing import TrackType
+from .types import PathLike, Trim, Zone
 
 _exPrefix = 'vodesfunc.automation.'
 
+
+__all__: list[str] = [
+    'Chapters',
+    'get_chapters_from_srcfile',
+    'light_sucks',
+    'microsecond_duration',
+    'Mux',
+    'settings_builder', 'sb',
+    'Setup',
+    'should_create_again',
+    'src_file', 'SRC_FILE',
+]
+
+
 class src_file:
-    
+
     file: Path
     src: vs.VideoNode
     src_cut: vs.VideoNode
@@ -44,7 +54,7 @@ class src_file:
         if trim_start != 0 or trim_end != 0:
             self.trim = (trim_start, trim_end)
             if trim_start != 0 and trim_end != 0:
-                self.src_cut = self.src[trim_start : trim_end]
+                self.src_cut = self.src[trim_start: trim_end]
             else:
                 if trim_start != 0:
                     self.src_cut = self.src[trim_start:]
@@ -52,6 +62,7 @@ class src_file:
                     self.src_cut = self.src[:trim_end]
         else:
             self.src_cut = self.src
+
 
 class Setup:
     """
@@ -89,12 +100,12 @@ class Setup:
                     'out_dir': self.out_dir,
                     'out_name': self.out_name,
                     'mkv_title_naming': self.mkv_title_naming,
-                    #'webhook_url': self.webhook_url
+                    # 'webhook_url': self.webhook_url
                 }
 
                 with open(config_name, 'w') as config_file:
                     config.write(config_file)
-            
+
                 raise SystemExit(f"Template config created at {Path(config_name).resolve()}.\nPlease set it up!")
 
             config.read(config_name)
@@ -102,13 +113,15 @@ class Setup:
 
             for key in settings:
                 setattr(self, key, settings[key])
-        
+
         self.episode = episode
         self.work_dir = Path(os.path.join(os.getcwd(), "_workdir", episode))
-        self.work_dir.mkdir(parents = True, exist_ok = True)
+        self.work_dir.mkdir(parents=True, exist_ok=True)
         return None
 
-    def encode_video(self, clip: vs.VideoNode, settings: str, zones: Zone | List[Zone] = None, save_csv_log: bool = True, generate_qpfile: bool = True, src: vs.VideoNode | src_file = None, print_command: bool = False) -> str:
+    def encode_video(self, clip: vs.VideoNode, settings: str, zones: Zone | list[Zone] = None,
+                     save_csv_log: bool = True, generate_qpfile: bool = True, src: vs.VideoNode | src_file = None,
+                     print_command: bool = False) -> str:
         """
             Encodes the clip you pass into it with x265
 
@@ -125,7 +138,7 @@ class Setup:
         args = settings
         # TODO: range, matrix, etc. parsing from the clip
         args += f' --output-depth {clip.format.bits_per_sample} --range limited --colorprim 1 --transfer 1 --colormatrix 1'
-        
+
         if zones:
             zones_settings: str = ''
             for i, ((start, end, multiplier)) in enumerate(zones):
@@ -144,7 +157,7 @@ class Setup:
                     args += f' --qpfile "{qpfile}"'
             else:
                 print(_exPrefix + "encode_video: No 'src' parameter passed, Skipping qpfile creation!")
-        
+
         outpath = self.work_dir.joinpath(self.episode + ".265").resolve()
         x265_command = f'"{x265_exe}" -o "{outpath}" - --y4m ' + args.strip()
 
@@ -152,20 +165,22 @@ class Setup:
             print(f'\nx265 Command:\n{x265_command}\n')
 
         print(f"Encoding episode {self.episode}...")
-        process = subprocess.Popen(x265_command, stdin = subprocess.PIPE)
-        clip.output(process.stdin, y4m = True, progress_update = lambda x, y: self._update_progress(x, y))
+        process = subprocess.Popen(x265_command, stdin=subprocess.PIPE)
+        clip.output(process.stdin, y4m=True, progress_update=lambda x, y: self._update_progress(x, y))
         process.communicate()
 
         print("\nDone encoding video.")
         return str(outpath.resolve())
 
-    def encode_audio(self, file: PathLike | src_file, track: int = 0, codec: str = 'opus', q: int = 200, encoder_settings: str = '', trim: Trim = None, clip: vs.VideoNode | src_file = None, dither_flac: bool = True) -> str:
+    def encode_audio(self, file: PathLike | src_file, track: int = 0, codec: str = 'opus', q: int = 200,
+                     encoder_settings: str = '', trim: Trim = None, clip: vs.VideoNode | src_file = None,
+                     dither_flac: bool = True) -> str:
         """
             Encodes the audio
 
             :param file:                Either a string based filepath, a Path object or a `src_file`
             :param track:               Audio Track Number of your input file. 0-based
-            :param codec:               Either flac, opus or aac. Uses ffmpeg, opusenc or qaac respectively. 
+            :param codec:               Either flac, opus or aac. Uses ffmpeg, opusenc or qaac respectively.
                                         'pass' and 'passthrough' also exist and do what they say
             :param q:                   Quality. Basically just the bitrate when using opus and the tVBR/-V value for qaac
             :param encoder_settings:    Arguments directly passed to opusenc or qaac
@@ -178,7 +193,7 @@ class Setup:
 
         if trim is not None:
             if isinstance(file, src_file):
-                print(r"Warning: trims in src_file types will overwrite other trims passed!")
+                print("Warning: trims in src_file types will overwrite other trims passed!")
             else:
                 if not isinstance(clip, vs.VideoNode) and not isinstance(clip, src_file):
                     raise _exPrefix + ".encode_audio: Trimming audio requires a clip input!"
@@ -188,7 +203,7 @@ class Setup:
         if isinstance(file, src_file):
             trim = file.trim
             clip = file.src_cut
-        
+
         file = file.file if isinstance(file, src_file) else file
         file = file if isinstance(file, Path) else Path(file)
 
@@ -209,17 +224,16 @@ class Setup:
             if codec.lower() == 'flac' and dither_flac:
                 commandline += f' -resampler soxr -sample_fmt s16 -ar 48000 -precision 28 -dither_method shibata'
             commandline += f' "{flac}"'
-            print("Creating FLAC intermediary for actual target codec..." 
-                if codec.lower() != 'flac' else 
-                f"Encoding FLAC Audio for EP{self.episode}...")
+            print("Creating FLAC intermediary for actual target codec..."
+                  if codec.lower() != 'flac' else f"Encoding FLAC Audio for EP{self.episode}...")
             subprocess.run(commandline, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if codec.lower() == 'flac':
                 print('Done.\n')
-        
+
         if codec.lower() == 'opus':
             if q > 512 or q < 8:
                 raise ValueError(f'{_exPrefix}.encode_audio: OPUS bitrate must be in the range of 8 - 512 (kbit/s)')
-            
+
             opusenc_exe = check.check_OpusEnc(self.allow_binary_download)
             out = os.path.join(self.work_dir.resolve(), file.stem + "_" + str(track) + ".ogg")
             if should_create_again(out):
@@ -231,7 +245,7 @@ class Setup:
         elif codec.lower() == 'aac':
             if q > 127 or q < 0:
                 raise ValueError(f'{_exPrefix}.encode_audio: QAAC tvbr must be in the range of 0 - 127')
-            
+
             qaac_exe = check.check_QAAC(self.allow_binary_download)
             out = os.path.join(self.work_dir.resolve(), file.stem + "_" + str(track) + ".m4a")
             if should_create_again(out):
@@ -249,14 +263,15 @@ class Setup:
                         commandline += f' -to "{microsecond_duration(clip.num_frames, clip.fps_num, clip.fps_den) - microsecond_duration(abs(trim[1]), clip.fps_num, clip.fps_den)}us"'
                     else:
                         commandline += f' -to "{microsecond_duration(trim[1], clip.fps_num, clip.fps_den)}us"'
-            
+
             out = os.path.join(self.work_dir.resolve(), file.stem + "_" + str(track) + ".mka")
             if should_create_again(out):
                 print(f"Cutting audio without reencoding..." if trim else f"Extracting audio for EP{self.episode}...")
                 commandline += f' -c:a copy -rf64 auto "{out}"'
-                subprocess.run(commandline, 
-                    #stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                    )
+                subprocess.run(
+                    commandline,
+                    # stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
                 print('Done.\n')
             return out
         else:
@@ -286,7 +301,8 @@ class Setup:
 
             :param mkv:         Path to file
             :param type:        TrackType to get
-            :param track:       The *absolute* track number. No idea why they do this but a specific video/audio/sub track is not a thing
+            :param track:       The *absolute* track number. No idea why they do this
+                                but a specific video/audio/sub track is not a thing
                                 so you're gonna have to pass the absolute number
             :return:            Path to resulting mkv or txt (if chapters)
         """
@@ -295,7 +311,7 @@ class Setup:
         mkvextract_exe = check.check_mkvextract(self.allow_binary_download)
         out_file = f"{mkv.stem}_{TrackType(type).name}_{str(track)}.{'txt' if type == TrackType.CHAPTERS else 'mkv'}"
         out_path = os.path.join(self.work_dir.resolve(), out_file)
-        
+
         if type == TrackType.CHAPTERS:
             commandline = f'"{mkvextract_exe}" "{mkv.resolve()}" chapters --simple "{out_path}"'
         else:
@@ -323,30 +339,33 @@ class Setup:
                 raise ChildProcessError(s)
 
         return out_path
-    
+
     def _update_progress(self, current_frame, total_frames):
-        print(f"\rVapoursynth: {current_frame} / {total_frames} ({100 * current_frame // total_frames}%) || Encoder: ", end = "")
+        print(f"\rVapoursynth: {current_frame} / {total_frames} "
+              f"({100 * current_frame // total_frames}%) || Encoder: ", end="")
 
     video = encode_video
     audio = encode_audio
 
+
 class Chapters():
 
-    chapters: List[muxing.Chapter] = []
+    chapters: list[muxing.Chapter] = []
     fps: Fraction
-    
-    def __init__(self, chapter_source: PathLike | muxing.Chapter | List[muxing.Chapter] | src_file, fps: Fraction = Fraction(24000, 1001)) -> None:
+
+    def __init__(self, chapter_source: PathLike | muxing.Chapter | list[muxing.Chapter] | src_file,
+                 fps: Fraction = Fraction(24000, 1001)) -> None:
         """
             Convenience class for chapters
 
             :param chapter_source:      Input either `vodesfunc.src_file` or (a list of) self defined chapters
-            :param fps:                 Needed for timestamp convertion (Will be taken from your source clip if passed a `src_file`)
-                                        Assumes 24000/1001 by default
+            :param fps:                 Needed for timestamp convertion (Will be taken from your source clip
+                                        if passed a `src_file`). Assumes 24000/1001 by default
         """
         self.fps = fps
-        if isinstance(chapter_source, Tuple):
+        if isinstance(chapter_source, tuple):
             self.chapters = [chapter_source]
-        elif isinstance(chapter_source, List):
+        elif isinstance(chapter_source, list):
             self.chapters = chapter_source
         elif isinstance(chapter_source, src_file):
             self.chapters = get_chapters_from_srcfile(chapter_source)
@@ -362,7 +381,7 @@ class Chapters():
 
     def trim(self, trim_start: int = 0, trim_end: int = 0):
         if trim_start > 0:
-            chapters: List[muxing.Chapter] = []
+            chapters: list[muxing.Chapter] = []
             for chapter in self.chapters:
                 if chapter[0] - trim_start < 0:
                     chapters.append(chapter)
@@ -370,11 +389,11 @@ class Chapters():
                 current = list(chapter)
                 current[0] = current[0] - trim_start
                 chapters.append(tuple(current))
-            
+
             self.chapters = chapters
         if trim_end != 0:
             if trim_end > 0:
-                chapters: List[muxing.Chapter] = []
+                chapters: list[muxing.Chapter] = []
                 for chapter in self.chapters:
                     if chapter[0] < trim_end:
                         chapters.append(chapter)
@@ -382,28 +401,30 @@ class Chapters():
 
         return self
 
-    def set_names(self, names: List[Optional[str]]):
-        old: List[str] = [chapter[1] for chapter in self.chapters]
+    def set_names(self, names: list[str | None]):
+        old: list[str] = [chapter[1] for chapter in self.chapters]
         if len(names) > len(old):
             raise ValueError(f'Chapters: too many names!')
         if len(names) < len(old):
             names += [None] * (len(old) - len(names))
 
-        chapters: List[muxing.Chapter] = []
+        chapters: list[muxing.Chapter] = []
         for i, name in enumerate(names):
             current = list(self.chapters[i])
             current[1] = name
             chapters.append(tuple(current))
 
-        self.chapters = chapters            
+        self.chapters = chapters
         return self
 
     def to_file(self, work_dir: PathLike = Path(os.getcwd())) -> str:
         work_dir = work_dir.resolve() if isinstance(work_dir, Path) else Path(work_dir).resolve()
         out_file = os.path.join(work_dir, 'chapters.txt')
-        with open(out_file, 'w', encoding = 'UTF-8') as f:
-            f.writelines([f'CHAPTER{i:02d}={Convert.f2assts(chapter[0], self.fps)}\nCHAPTER{i:02d}NAME={chapter[1] if chapter[1] else ""}\n' for i, chapter in enumerate(self.chapters)])
+        with open(out_file, 'w', encoding='UTF-8') as f:
+            f.writelines([f'CHAPTER{i:02d}={Convert.f2assts(chapter[0], self.fps)}\nCHAPTER{i:02d}NAME='
+                          f'{chapter[1] if chapter[1] else ""}\n' for i, chapter in enumerate(self.chapters)])
         return out_file
+
 
 class Mux():
 
@@ -444,9 +465,9 @@ class Mux():
                 if chapterfile.name.lower() == 'chapters.txt':
                     self.commandline += f' --chapters "{chapterfile}"'
                 continue
-            
+
             raise f'{_exPrefix}.Mux: Only _track or Chapters types are supported as muxing input!'
-    
+
     def run(self, print_command: bool = False) -> str:
         """
             Starts the muxing process
@@ -463,11 +484,14 @@ class Mux():
         print("Done.")
         return str(self.outfile.resolve())
 
-def settings_builder(preset: str | int = 'slow', crf: float = 14.5, qcomp: float = 0.75, 
-    psy_rd: float = 2.0, psy_rdoq: float = 2.0, aq_strength: float = 0.75, aq_mode: int = 3, rd: int = 4, rect: bool = True, 
-    amp: bool = False, chroma_qpoffsets: int = -2, tu_intra_depth: int = 2, tu_inter_depth: int = 2, rskip: bool | int = 0,
-    tskip: bool = False, ref: int = 4, bframes: int = 16, cutree: bool = False, rc_lookahead: int = 60, subme: int = 5, me: int = 3,
-    b_intra: bool = True, weightb: bool = True, append: str = "") -> str:
+
+def settings_builder(
+        preset: str | int = 'slow', crf: float = 14.5, qcomp: float = 0.75,
+        psy_rd: float = 2.0, psy_rdoq: float = 2.0, aq_strength: float = 0.75, aq_mode: int = 3, rd: int = 4,
+        rect: bool = True, amp: bool = False, chroma_qpoffsets: int = -2, tu_intra_depth: int = 2,
+        tu_inter_depth: int = 2, rskip: bool | int = 0, tskip: bool = False, ref: int = 4, bframes: int = 16,
+        cutree: bool = False, rc_lookahead: int = 60, subme: int = 5, me: int = 3, b_intra: bool = True,
+        weightb: bool = True, append: str = "") -> str:
 
     # Simple insert values
     settings = f" --preset {preset} --crf {crf} --bframes {bframes} --ref {ref} --rc-lookahead {rc_lookahead} --subme {subme} --me {me}"
@@ -485,8 +509,10 @@ def settings_builder(preset: str | int = 'slow', crf: float = 14.5, qcomp: float
     settings += (" " + append.strip()) if append.strip() else ""
     return settings
 
+
 def light_sucks(**kwargs) -> str:
-   return " --".join(f'{setting} {value}' for setting, value in kwargs.items()).strip()
+    return " --".join(f'{setting} {value}' for setting, value in kwargs.items()).strip()
+
 
 def should_create_again(file: str | Path, min_bytes: int = 10000) -> bool:
     file = file if isinstance(file, Path) else Path(file)
@@ -498,14 +524,17 @@ def should_create_again(file: str | Path, min_bytes: int = 10000) -> bool:
     else:
         return False
 
+
 def microsecond_duration(frame: int, fps_num: int = 24000, fps_den: int = 1001) -> int:
-    framerate = np.divide(float(fps_num), float(fps_den), dtype = np.longdouble)
-    frametime_microseconds = np.multiply(np.divide(float(1), framerate, dtype = np.longdouble), float(1000) * float(1000), dtype = np.longdouble)
-    frametime_microseconds = np.multiply(frametime_microseconds, frame, dtype = np.longdouble)
+    framerate = np.divide(float(fps_num), float(fps_den), dtype=np.longdouble)
+    frametime_microseconds = np.multiply(np.divide(float(1), framerate, dtype=np.longdouble),
+                                         float(1000) * float(1000), dtype=np.longdouble)
+    frametime_microseconds = np.multiply(frametime_microseconds, frame, dtype=np.longdouble)
     rounded_microseconds = np.round(frametime_microseconds)
     return int(rounded_microseconds)
 
-def get_chapters_from_srcfile(src: src_file) -> List[muxing.Chapter]:
+
+def get_chapters_from_srcfile(src: src_file) -> list[muxing.Chapter]:
     stream_dir = src.file.resolve().parent
     if stream_dir.name.lower() != 'stream':
         print(f'Your source file is not in a default bdmv structure!\nWill skip chapters.')
@@ -515,7 +544,7 @@ def get_chapters_from_srcfile(src: src_file) -> List[muxing.Chapter]:
         print(f'PLAYLIST folder couldn\'t have been found!\nWill skip chapters.')
         return None
 
-    chapters: List[muxing.Chapter] = []
+    chapters: list[muxing.Chapter] = []
     for f in playlist_dir.rglob("*"):
         if not os.path.isfile(f) or f.suffix.lower() != '.mpls':
             continue
@@ -524,8 +553,8 @@ def get_chapters_from_srcfile(src: src_file) -> List[muxing.Chapter]:
             file.seek(header.playlist_start_address, os.SEEK_SET)
             playlist = mpls.load_playlist(file)
             if not playlist.play_items:
-                continue;
-            
+                continue
+
             file.seek(header.playlist_mark_start_address, os.SEEK_SET)
             playlist_mark = mpls.load_playlist_mark(file)
             if (plsmarks := playlist_mark.playlist_marks) is not None:
@@ -536,26 +565,27 @@ def get_chapters_from_srcfile(src: src_file) -> List[muxing.Chapter]:
         for i, playitem in enumerate(playlist.play_items):
             if playitem.clip_information_filename == src.file.stem and \
                     playitem.clip_codec_identifier.lower() == src.file.suffix.lower().split('.')[1]:
-                
-                linked_marks = [mark for mark in marks if mark.ref_to_play_item_id == i]    
+
+                linked_marks = [mark for mark in marks if mark.ref_to_play_item_id == i]
                 try:
                     assert playitem.intime
                     offset = min(playitem.intime, linked_marks[0].mark_timestamp)
                 except IndexError:
                     continue
                 if playitem.stn_table and playitem.stn_table.length != 0 and playitem.stn_table.prim_video_stream_entries \
-                    and (fps_n := playitem.stn_table.prim_video_stream_entries[0][1].framerate):
+                        and (fps_n := playitem.stn_table.prim_video_stream_entries[0][1].framerate):
                     try:
                         fps = mpls.FRAMERATE[fps_n]
                     except AttributeError as attr_err:
                         print('Couldn\'t parse fps from playlist! Will take fps from source clip.')
                         fps = Fraction(src.src_cut.fps_num, src.src_cut.fps_den)
-                    
+
                     for i, lmark in enumerate(linked_marks, start=1):
                         frame = Convert.seconds2f((lmark.mark_timestamp - offset) / 45000, fps)
                         chapters.append((frame, f'Chapter {i:02.0f}'))
 
     return chapters
+
 
 sb = settings_builder
 SRC_FILE = src_file
