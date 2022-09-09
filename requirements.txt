@@ -2,7 +2,6 @@ ass>=0.5.2
 py7zr>=0.20.0
 wget>=3.2
 vsutil>=0.8.0
-awsmfunc>=1.3.2
 vskernels>=1.2.0
 vsscale>=1.0.1
 fontTools>=4.37.1

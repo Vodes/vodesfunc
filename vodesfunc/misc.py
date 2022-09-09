@@ -4,7 +4,6 @@ A collection of functions to make me embrace my laziness
 from functools import partial
 from typing import Any
 
-import awsmfunc as awf
 import vapoursynth as vs
 from vsutil import depth, get_y
 
@@ -39,6 +38,11 @@ def dirty_prop_set(clip: vs.VideoNode, threshold: int = 1100, luma_scaling: int 
         if debug_output:
             print(f"Frame {n}: Average Brightness - {brightness:.20f}, Weighted - {weighted_thr:.20f}")
         return core.std.Expr([clip_a, clip_b], [f'y x - {weighted_thr} > 65536 0 ?', ''])
+
+    try:
+        import awsmfunc as awf
+    except:
+        raise ModuleNotFoundError('awsmfunc not found!')
 
     clip = depth(clip, 16).std.PlaneStats()  # Wouldn't this be set way earlier?
     bbm = awf.bbmod(clip, 1, 1, 1, 1, thresh=50, blur=666)
