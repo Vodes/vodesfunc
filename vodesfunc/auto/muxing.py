@@ -227,6 +227,67 @@ class SubTrack(_track):
 
         return out
 
+    def autoswapper(self, allowed_styles: list[str] | None = ['Default', 'Main', 'Alt', 'Overlap', 'Flashback', 'Top', 'Italics'], print_swaps: bool = False) -> "SubTrack":
+        """
+            autoswapper does the swapping.
+            Too lazy to explain
+
+            :param allowed_styles:      List of allowed styles to do the swapping on
+                                        Will run on every line if passed `None`
+            :param print_swaps:         Prints the swaps
+            
+            :return:                    This SubTrack
+        """
+        import re
+        with open(self.file, 'r', encoding='utf_8_sig') as f:
+            doc = ass.parse(f)
+        
+        events = []
+
+        for i, line in enumerate(doc.events):
+            if not allowed_styles or line.style.lower() in (style.lower() for style in allowed_styles):
+                to_swap: dict = {}
+                # {*}This will be replaced{*With this}
+                for match in re.finditer(re.compile(r'\{\*\}([^{]*)\{\*([^}*]+)\}'), line.text):
+                    to_swap.update({
+                        f"{match.group(0)}":
+                        f"{{*}}{match.group(2)}{{*{match.group(1)}}}"
+                    })
+                
+                # This sentence is no longer{** incomplete}
+                for match in re.finditer(re.compile(r'\{\*\*([^}]+)\}'), line.text):
+                    to_swap.update({
+                        f"{match.group(0)}":
+                        f"{{*}}{match.group(1)}{{*}}"
+                    })
+                
+                # This sentence is no longer{*} incomplete{*} 
+                for match in re.finditer(re.compile(r'\{\*\}([^{]*)\{\* *\}'), line.text):
+                    to_swap.update({
+                        f"{match.group(0)}":
+                        f"{{**{match.group(1)}}}"
+                    })
+                #print(to_swap)
+                for key, val in to_swap.items():
+                    if print_swaps:
+                        print(f'autoswapper: Swapped "{key}" for "{val}" on line {i}')
+                    line.text = line.text.replace(key, val)
+            
+            if line.effect.strip() == "***" or line.name.strip() == "***":
+                if isinstance(line, ass.Comment):
+                    line.TYPE = 'Dialogue'
+                elif isinstance(line, ass.Dialogue):
+                    line.TYPE = 'Comment'
+
+            events.append(line)
+        
+        doc.events = events
+        out_file = Path(os.path.join(self.file.parent, self.file.stem + "-swapped.ass"))
+        with open(out_file, 'w', encoding='utf_8_sig') as f:
+            doc.dump_file(f)
+        
+        self.file = out_file
+
 
 class MkvTrack(_track):
 
