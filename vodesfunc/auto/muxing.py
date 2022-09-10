@@ -5,7 +5,7 @@ import os
 
 import ass
 from .fonts import validate_and_save_fonts
-from ..automation import PathLike
+from ..types import PathLike
 
 _exPrefix = 'vodesfunc.automation.muxing:'
 
