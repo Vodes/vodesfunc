@@ -27,8 +27,10 @@ __all__: list[str] = [
     'Mux',
     'settings_builder', 'sb',
     'Setup',
-    'should_create_again',
     'src_file', 'SRC_FILE',
+    'VT', 'AT', 'ST',
+    'VideoTrack', 'AudioTrack', 'SubTrack',
+    'Attachment', 'GlobSearch'
 ]
 
 
