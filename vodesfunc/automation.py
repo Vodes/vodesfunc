@@ -13,7 +13,7 @@ from pyparsebluray import mpls
 from pytimeconv import Convert
 
 from .auto import check, muxing
-from .auto.muxing import TrackType
+from .auto.muxing import VT, AT, ST, VideoTrack, AudioTrack, SubTrack, Attachment, GlobSearch, TrackType
 from .types import PathLike, Trim, Zone
 
 _exPrefix = 'vodesfunc.automation.'
@@ -560,12 +560,12 @@ def get_chapters_from_srcfile(src: src_file) -> list[muxing.Chapter]:
             if (plsmarks := playlist_mark.playlist_marks) is not None:
                 marks = plsmarks
             else:
-                raise ValueError(f'There is no playlist marks in this file!')
+                raise 'There is no playlist marks in this file!'
 
         for i, playitem in enumerate(playlist.play_items):
             if playitem.clip_information_filename == src.file.stem and \
                     playitem.clip_codec_identifier.lower() == src.file.suffix.lower().split('.')[1]:
-
+                print(f'Found chapters for "{src.file.name}" in "{f.name}"')
                 linked_marks = [mark for mark in marks if mark.ref_to_play_item_id == i]
                 try:
                     assert playitem.intime
@@ -576,13 +576,16 @@ def get_chapters_from_srcfile(src: src_file) -> list[muxing.Chapter]:
                         and (fps_n := playitem.stn_table.prim_video_stream_entries[0][1].framerate):
                     try:
                         fps = mpls.FRAMERATE[fps_n]
-                    except AttributeError as attr_err:
+                    except:
                         print('Couldn\'t parse fps from playlist! Will take fps from source clip.')
                         fps = Fraction(src.src_cut.fps_num, src.src_cut.fps_den)
 
                     for i, lmark in enumerate(linked_marks, start=1):
                         frame = Convert.seconds2f((lmark.mark_timestamp - offset) / 45000, fps)
                         chapters.append((frame, f'Chapter {i:02.0f}'))
+
+        if chapters:
+            break
 
     return chapters
 
