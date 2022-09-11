@@ -422,7 +422,12 @@ class Chapters():
 
         return self
 
-    def set_names(self, names: list[str | None]):
+    def set_names(self, names: list[str | None]) -> "Chapters":
+        """
+            Renames the chapters
+
+            :param names:   List of names
+        """
         old: list[str] = [chapter[1] for chapter in self.chapters]
         if len(names) > len(old):
             raise ValueError(f'Chapters: too many names!')
@@ -436,6 +441,20 @@ class Chapters():
             chapters.append(tuple(current))
 
         self.chapters = chapters
+        return self
+
+    def shift_chapter(self, chapter: int = 0, shift_amount: int = 0) -> "Chapters":
+        """
+            Used to shift a single chapter by x frames
+
+            :param chapter:         Chapter number (starting at 0)
+            :param shift_amount:    Frames to shift by
+        """
+        ch = list(self.chapters[chapter])
+        shifted_frame = ch[0] + shift_amount
+        if shifted_frame > 0:
+            ch[0] = shifted_frame
+        self.chapters[chapter] = tuple(ch)
         return self
 
     def to_file(self, work_dir: PathLike = Path(os.getcwd())) -> str:
