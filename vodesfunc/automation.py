@@ -175,8 +175,8 @@ class Setup:
         return str(outpath.resolve())
 
     def encode_audio(self, file: PathLike | src_file, track: int = 0, codec: str = 'opus', q: int = 200,
-                     encoder_settings: str = '', trim: Trim = None, clip: vs.VideoNode | src_file = None,
-                     dither_flac: bool = True) -> str:
+                     encoder_settings: str = '', trim: Trim = None, clip: vs.VideoNode | src_file = None,# use_bs_trimming: bool = False,
+                     dither_flac: bool = True, always_dither: bool = False, quiet: bool = True) -> str:
         """
             Encodes the audio
 
@@ -188,7 +188,9 @@ class Setup:
             :param encoder_settings:    Arguments directly passed to opusenc or qaac
             :param trim:                Tuple of frame numbers; Can be left empty if you passed a `src_file` with trims
             :param clip:                Vapoursynth VideoNode needed when trimming; Can be left empty if you passed a `src_file`
-            :param dither_flac:         Will dither your FLAC output to 16bit
+            :param dither_flac:         Will dither your FLAC output to 16bit and 48 kHz
+            :param always_dither:       Dithers regardless of your final output
+            :param quiet:               Will print the subprocess outputs if False
             :return:                    Absolute filepath for resulting audio file
         """
         encoder_settings = ' ' + encoder_settings.strip()
@@ -198,86 +200,101 @@ class Setup:
                 print("Warning: trims in src_file types will overwrite other trims passed!")
             else:
                 if not isinstance(clip, vs.VideoNode) and not isinstance(clip, src_file):
-                    raise _exPrefix + ".encode_audio: Trimming audio requires a clip input!"
+                    raise "encode_audio: Trimming audio requires a clip input!"
                 elif isinstance(clip, src_file):
                     clip = clip.src
+                    fps = Fraction(clip.fps_num, clip.fps_den)
 
         if isinstance(file, src_file):
             trim = file.trim
-            clip = file.src_cut
+            clip = file.src
+            fps = Fraction(clip.fps_num, clip.fps_den)
 
         file = file.file if isinstance(file, src_file) else file
         file = file if isinstance(file, Path) else Path(file)
 
-        ffmpeg_exe = check.check_FFmpeg(self.allow_binary_download)
-        flac = os.path.join(self.work_dir.resolve(), file.stem + "_" + str(track) + ".flac")
-        commandline = f'"{ffmpeg_exe}" -i "{file.resolve()}" -map 0:a:{track}'
-        if should_create_again(flac) and codec.lower() not in ['pass', 'passthrough']:
+        base_path = os.path.join(self.work_dir.resolve(), file.stem + "_" + str(track))
+
+        def ffmpeg_header() -> str:
+            ffmpeg_exe = check.check_FFmpeg(self.allow_binary_download)
+            return f'"{ffmpeg_exe}" -hide_banner -loglevel warning'
+
+        def ffmpeg_seekargs() -> str:
+            args = ''
             if trim:
-                if isinstance(trim[0], int) and trim[0] != 0:
-                    commandline += f' -ss "{microsecond_duration(trim[0], clip.fps_num, clip.fps_den)}us"'
-                if isinstance(trim[1], int) and trim[1] != 0:
-                    if trim[1] < 0:
-                        commandline += f' -to "{microsecond_duration(clip.num_frames, clip.fps_num, clip.fps_den) - microsecond_duration(abs(trim[1]), clip.fps_num, clip.fps_den)}us"'
+                if trim[0] is not None and trim[0] > 0:
+                    args += f' -ss {Convert.f2ts(trim[0], fps)}'
+                if trim[1] is not None and trim[1] != 0:
+                    if trim[1] > 0:
+                        args += f' -to {Convert.f2ts(trim[1], fps)}'
                     else:
-                        commandline += f' -to "{microsecond_duration(trim[1], clip.fps_num, clip.fps_den)}us"'
+                        end_frame = clip.num_frames - abs(trim[1])
+                        args += f' -to {Convert.f2ts(end_frame, fps)}'
+            return args
 
-            commandline += f' -c flac -compression_level 10'
-            if codec.lower() == 'flac' and dither_flac:
-                commandline += f' -resampler soxr -sample_fmt s16 -ar 48000 -precision 28 -dither_method shibata'
-            commandline += f' "{flac}"'
-            print("Creating FLAC intermediary for actual target codec..."
-                  if codec.lower() != 'flac' else f"Encoding FLAC Audio for EP{self.episode}...")
-            subprocess.run(commandline, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if codec.lower() == 'flac':
-                print('Done.\n')
+        def toflac() -> str:
+            is_intermediary = codec.lower() != 'flac'
+            compression_level = "10" if not is_intermediary else "0"
+            commandline = f'{ffmpeg_header()} -i "{file.resolve()}" -map 0:a:{track} {ffmpeg_seekargs()} -f flac -compression_level {compression_level}'
+            if (dither_flac and codec.lower() == 'flac') or always_dither:
+                commandline += ' -sample_fmt s16 -ar 48000 -resampler soxr -precision 28 -dither_method shibata'
+            if codec.lower() != 'opus':
+                _flac = base_path + ".flac"
+                if not should_create_again(_flac):
+                    return _flac
+                commandline += f' "{_flac}"'
+                print(f'Creating FLAC intermediary audio track {track} for EP{self.episode}...'
+                    if is_intermediary else f'Encoding audio track {track} for EP{self.episode} to FLAC...')
+                run_commandline(commandline, quiet, False)
+                if not is_intermediary:
+                    print('Done\n')
+                return _flac
+            else:
+                # We can just use a cool pipe with opusenc
+                return commandline + " - | "
+            
+        if codec.lower() == 'flac':
+            return toflac()
 
+        if codec.lower() in ['pass', 'passthrough']:
+            out_file = base_path + ".mka"
+            if not should_create_again(out_file):
+                return out_file
+            print(f'Trimming audio track {track} for EP{self.episode}...'
+                if trim else f'Extracting audio track {track} for EP{self.episode}')
+            commandline = f'{ffmpeg_header()} -i "{file.resolve()}" -map 0:a:{track} {ffmpeg_seekargs()} -c:a copy "{out_file}"'
+            run_commandline(commandline, quiet, False)
+            print('Done.\n')
+            return out_file
+
+        if codec.lower() == 'aac':
+            if q > 127 or q < 0:
+                raise ValueError(f'encode_audio: QAAC tvbr must be in the range of 0 - 127')
+            flac = toflac()
+            qaac = check.check_QAAC(self.allow_binary_download)
+            out_file = base_path + ".m4a"
+            if not should_create_again(out_file):
+                return out_file
+            commandline = f'"{qaac}" -V {q} {encoder_settings} -o "{out_file}" "{flac}"'
+            print(f'Encoding audio track {track} for EP{self.episode} to AAC...')
+            run_commandline(commandline, quiet, False)
+            print('Done.\n')
+            Path(flac).unlink(missing_ok = True)
+            return out_file
+        
         if codec.lower() == 'opus':
             if q > 512 or q < 8:
-                raise ValueError(f'{_exPrefix}.encode_audio: OPUS bitrate must be in the range of 8 - 512 (kbit/s)')
-
-            opusenc_exe = check.check_OpusEnc(self.allow_binary_download)
-            out = os.path.join(self.work_dir.resolve(), file.stem + "_" + str(track) + ".ogg")
-            if should_create_again(out):
-                commandline = f'"{opusenc_exe}" --bitrate {q} {encoder_settings} "{flac}" "{out}"'
-                print(f"Encoding OPUS Audio for EP{self.episode}...")
-                subprocess.run(commandline, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                print('Done.\n')
-            return out
-        elif codec.lower() == 'aac':
-            if q > 127 or q < 0:
-                raise ValueError(f'{_exPrefix}.encode_audio: QAAC tvbr must be in the range of 0 - 127')
-
-            qaac_exe = check.check_QAAC(self.allow_binary_download)
-            out = os.path.join(self.work_dir.resolve(), file.stem + "_" + str(track) + ".m4a")
-            if should_create_again(out):
-                commandline = f'"{qaac_exe}" -V {q} {encoder_settings} -o "{out}" "{flac}"'
-                print(f"Encoding AAC Audio for EP{self.episode}...")
-                subprocess.run(commandline, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                print('Done.\n')
-            return out
-        elif codec.lower() in ['pass', 'passthrough']:
-            if trim:
-                if isinstance(trim[0], int) and trim[0] != 0:
-                    commandline += f' -ss "{microsecond_duration(trim[0], clip.fps_num, clip.fps_den)}us"'
-                if isinstance(trim[1], int) and trim[1] != 0:
-                    if trim[1] < 0:
-                        commandline += f' -to "{microsecond_duration(clip.num_frames, clip.fps_num, clip.fps_den) - microsecond_duration(abs(trim[1]), clip.fps_num, clip.fps_den)}us"'
-                    else:
-                        commandline += f' -to "{microsecond_duration(trim[1], clip.fps_num, clip.fps_den)}us"'
-
-            out = os.path.join(self.work_dir.resolve(), file.stem + "_" + str(track) + ".mka")
-            if should_create_again(out):
-                print(f"Cutting audio without reencoding..." if trim else f"Extracting audio for EP{self.episode}...")
-                commandline += f' -c:a copy -rf64 auto "{out}"'
-                subprocess.run(
-                    commandline,
-                    # stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                )
-                print('Done.\n')
-            return out
-        else:
-            return flac
+                raise ValueError(f'encode_audio: Opus bitrate must be in the range of 8 - 512 (kbit/s)')
+            commandline = toflac()
+            opusenc = check.check_OpusEnc(self.allow_binary_download)
+            out_file = base_path + ".ogg"
+            if not should_create_again(out_file):
+                return out_file
+            commandline += f'"{opusenc}" --bitrate {q} {encoder_settings} - "{out_file}"'
+            print(f'Encoding audio track {track} for EP{self.episode} to Opus...')
+            run_commandline(commandline, quiet, True)
+            print('Done.\n')
+            return out_file
 
     def generate_qp_file(self, clip: vs.VideoNode) -> str:
         filepath = os.path.join(self.work_dir, 'qpfile.txt')
@@ -348,7 +365,6 @@ class Setup:
 
     video = encode_video
     audio = encode_audio
-
 
 class Chapters():
 
@@ -539,6 +555,14 @@ def microsecond_duration(frame: int, fps_num: int = 24000, fps_den: int = 1001) 
     frametime_microseconds = np.multiply(frametime_microseconds, frame, dtype=np.longdouble)
     rounded_microseconds = np.round(frametime_microseconds)
     return int(rounded_microseconds)
+
+def run_commandline(command: str, quiet: bool = True, shell: bool = False):
+    if quiet:
+        p = subprocess.Popen(command, stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=shell)
+    else:
+        p = subprocess.Popen(command, shell=shell)
+    
+    p.wait()
 
 
 def get_chapters_from_srcfile(src: src_file) -> list[muxing.Chapter]:
