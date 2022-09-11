@@ -374,6 +374,11 @@ class Chapters():
             self.fps = Fraction(chapter_source.src.fps_num, chapter_source.src.fps_den)
             if chapter_source.trim:
                 self.trim(chapter_source.trim[0], chapter_source.trim[1])
+            chapters: list[muxing.Chapter] = []
+            for chapter in self.chapters:
+                if chapter[0] < chapter_source.src_cut.num_frames:
+                    chapters.append(chapter)
+            self.chapters = chapters   
         elif isinstance(chapter_source, PathLike):
             # Handle both OGM .txt files and xml files maybe
             # Supposed to be used with something like setup.from_mkv()
@@ -584,6 +589,8 @@ def get_chapters_from_srcfile(src: src_file) -> list[muxing.Chapter]:
 
                     for i, lmark in enumerate(linked_marks, start=1):
                         frame = Convert.seconds2f((lmark.mark_timestamp - offset) / 45000, fps)
+                        if frame > src.src.num_frames - 1:
+                            continue
                         chapters.append((frame, f'Chapter {i:02.0f}'))
 
         if chapters:
