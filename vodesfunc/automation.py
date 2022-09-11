@@ -7,7 +7,6 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Callable
 
-import numpy as np
 import vapoursynth as vs
 from pyparsebluray import mpls
 from pytimeconv import Convert
@@ -546,15 +545,6 @@ def should_create_again(file: str | Path, min_bytes: int = 10000) -> bool:
         return True
     else:
         return False
-
-
-def microsecond_duration(frame: int, fps_num: int = 24000, fps_den: int = 1001) -> int:
-    framerate = np.divide(float(fps_num), float(fps_den), dtype=np.longdouble)
-    frametime_microseconds = np.multiply(np.divide(float(1), framerate, dtype=np.longdouble),
-                                         float(1000) * float(1000), dtype=np.longdouble)
-    frametime_microseconds = np.multiply(frametime_microseconds, frame, dtype=np.longdouble)
-    rounded_microseconds = np.round(frametime_microseconds)
-    return int(rounded_microseconds)
 
 def run_commandline(command: str, quiet: bool = True, shell: bool = False):
     if quiet:
