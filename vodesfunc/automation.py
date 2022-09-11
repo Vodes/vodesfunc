@@ -22,7 +22,6 @@ __all__: list[str] = [
     'Chapters',
     'get_chapters_from_srcfile',
     'light_sucks',
-    'microsecond_duration',
     'Mux',
     'settings_builder', 'sb',
     'Setup',
