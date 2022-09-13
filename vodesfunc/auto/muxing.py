@@ -1,6 +1,8 @@
 from enum import IntEnum
 from pathlib import Path
+from re import L
 from typing import Optional
+from pytimeconv import Convert
 import os
 
 import ass
@@ -287,6 +289,58 @@ class SubTrack(_track):
             doc.dump_file(f)
         
         self.file = out_file
+        return self
+
+    def syncpoint_merge(self, syncpoint: str, mergefile: PathLike | GlobSearch) -> "SubTrack":
+        if isinstance(mergefile, GlobSearch):
+            mergefile = mergefile.paths[0] if isinstance(mergefile.paths, list) else mergefile.paths
+        mergefile = mergefile if isinstance(mergefile, Path) else Path(mergefile)
+        was_merged = False
+
+        with open(self.file, 'r', encoding='utf_8_sig') as f:
+            doc = ass.parse(f)
+        with open(mergefile, 'r', encoding='utf_8_sig') as f:
+            mergedoc = ass.parse(f)
+
+        events = []
+        tomerge = []
+        existing_styles = [style.name for style in (doc.styles)]
+
+        for line in doc.events:
+            events.append(line)
+            if line.effect.lower().strip() == syncpoint.lower().strip():
+                was_merged = True
+                start = line.start
+                offset = None
+                for l in sorted(mergedoc.events, key = lambda event: event.start):
+                    if not offset:
+                        offset = start - l.start
+                        l.start = start
+                        l.end = (l.end + offset)
+                    else:
+                        print(f"{l.start} | {offset} | {(l.start + offset)}")
+                        l.start = (l.start + offset)
+                        l.end = (l.end + offset)
+                    tomerge.append(l)
+
+        if was_merged:
+            events.extend(tomerge)
+            # Merge the styles in aswell
+            for style in mergedoc.styles:
+                if style.name in existing_styles:
+                    continue
+                doc.styles.append(style)
+
+            doc.events = events
+            out_file = Path(os.path.join(self.file.parent, self.file.stem + "-merge.ass"))
+            with open(out_file, 'w', encoding='utf_8_sig') as f:
+                doc.dump_file(f)
+
+            self.file = out_file
+        else:
+            print(f'Syncpoint "{syncpoint}" was not found!')
+
+        return self
 
 
 class MkvTrack(_track):
