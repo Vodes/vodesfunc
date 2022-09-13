@@ -291,7 +291,16 @@ class SubTrack(_track):
         self.file = out_file
         return self
 
-    def syncpoint_merge(self, syncpoint: str, mergefile: PathLike | GlobSearch) -> "SubTrack":
+    def syncpoint_merge(self, syncpoint: str, mergefile: PathLike | GlobSearch, use_actor_field: bool = False) -> "SubTrack":
+        """
+            Merge other sub files (Opening/Ending kfx for example) with offsetting by syncpoints
+
+            :param syncpoint:           The syncpoint to be used
+            :param mergefile:           The file to be merged
+            :param use_actor_field:     Search the actor field instead of the effect field for the syncpoint
+
+            :return:                    This SubTrack
+        """
         if isinstance(mergefile, GlobSearch):
             mergefile = mergefile.paths[0] if isinstance(mergefile.paths, list) else mergefile.paths
         mergefile = mergefile if isinstance(mergefile, Path) else Path(mergefile)
@@ -308,7 +317,8 @@ class SubTrack(_track):
 
         for line in doc.events:
             events.append(line)
-            if line.effect.lower().strip() == syncpoint.lower().strip():
+            field = line.name if use_actor_field else line.effect
+            if field.lower().strip() == syncpoint.lower().strip():
                 was_merged = True
                 start = line.start
                 offset = None
@@ -318,7 +328,6 @@ class SubTrack(_track):
                         l.start = start
                         l.end = (l.end + offset)
                     else:
-                        print(f"{l.start} | {offset} | {(l.start + offset)}")
                         l.start = (l.start + offset)
                         l.end = (l.end + offset)
                     tomerge.append(l)
