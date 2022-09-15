@@ -458,9 +458,17 @@ class Chapters():
         self.chapters[chapter] = tuple(ch)
         return self
 
-    def to_file(self, work_dir: PathLike = Path(os.getcwd())) -> str:
-        work_dir = work_dir.resolve() if isinstance(work_dir, Path) else Path(work_dir).resolve()
-        out_file = os.path.join(work_dir, 'chapters.txt')
+    def to_file(self, out: PathLike = Path(os.getcwd())) -> str:
+        """
+            Outputs the chapters to an OGM file
+
+            :param out:     Can be either a directory or a full file path
+        """
+        out = out.resolve() if isinstance(out, Path) else Path(out).resolve()
+        if out.is_dir():
+            out_file = os.path.join(out, 'chapters.txt')
+        else:
+            out_file = out
         with open(out_file, 'w', encoding='UTF-8') as f:
             f.writelines([f'CHAPTER{i:02d}={Convert.f2assts(chapter[0], self.fps)}\nCHAPTER{i:02d}NAME='
                           f'{chapter[1] if chapter[1] else ""}\n' for i, chapter in enumerate(self.chapters)])
