@@ -1,8 +1,6 @@
 from enum import IntEnum
 from pathlib import Path
-from re import L
 from typing import Optional
-from pytimeconv import Convert
 import os
 
 import ass

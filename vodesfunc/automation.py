@@ -11,7 +11,7 @@ import vapoursynth as vs
 from pyparsebluray import mpls
 from pytimeconv import Convert
 
-from .auto import check, muxing
+from .auto import check, muxing, calc
 from .auto.muxing import VT, AT, ST, VideoTrack, AudioTrack, SubTrack, Attachment, GlobSearch, TrackType
 from .types import PathLike, Trim, Zone
 
