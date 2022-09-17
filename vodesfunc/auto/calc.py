@@ -36,5 +36,5 @@ def format_timedelta(time: timedelta, precision: int = 3) -> str:
     s %= 60
     h = m // 60
     m %= 60
-    return f'{h:02d}:{m:02d}:{s:02d}.{str(rounded).split(".")[1].zfill(precision)}'
+    return f'{h:02d}:{m:02d}:{s:02d}.{str(rounded).split(".")[1].ljust(precision, "0")}'
 
