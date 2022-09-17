@@ -222,13 +222,13 @@ class Setup:
             args = ''
             if trim:
                 if trim[0] is not None and trim[0] > 0:
-                    args += f' -ss {format_timedelta(frame_to_timedelta(trim[0], fps), 6)}'
+                    args += f' -ss {format_timedelta(frame_to_timedelta(trim[0], fps))}'
                 if trim[1] is not None and trim[1] != 0:
                     if trim[1] > 0:
-                        args += f' -to {format_timedelta(frame_to_timedelta(trim[1], fps), 6)}'
+                        args += f' -to {format_timedelta(frame_to_timedelta(trim[1], fps))}'
                     else:
                         end_frame = clip.num_frames - abs(trim[1])
-                        args += f' -to {format_timedelta(frame_to_timedelta(end_frame, fps), 6)}'
+                        args += f' -to {format_timedelta(frame_to_timedelta(end_frame, fps))}'
             return args
 
         def toflac() -> str:
