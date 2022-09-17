@@ -9,9 +9,9 @@ from typing import Callable
 
 import vapoursynth as vs
 from pyparsebluray import mpls
-from pytimeconv import Convert
 
-from .auto import check, muxing, calc
+from .auto import check, muxing
+from .auto.calc import timedelta_to_frame, frame_to_timedelta, mpls_timestamp_to_timedelta, format_timedelta
 from .auto.muxing import VT, AT, ST, VideoTrack, AudioTrack, SubTrack, Attachment, GlobSearch, TrackType
 from .types import PathLike, Trim, Zone
 
@@ -222,13 +222,13 @@ class Setup:
             args = ''
             if trim:
                 if trim[0] is not None and trim[0] > 0:
-                    args += f' -ss {Convert.f2ts(trim[0], fps)}'
+                    args += f' -ss {format_timedelta(frame_to_timedelta(trim[0], fps), 6)}'
                 if trim[1] is not None and trim[1] != 0:
                     if trim[1] > 0:
-                        args += f' -to {Convert.f2ts(trim[1], fps)}'
+                        args += f' -to {format_timedelta(frame_to_timedelta(trim[1], fps), 6)}'
                     else:
                         end_frame = clip.num_frames - abs(trim[1])
-                        args += f' -to {Convert.f2ts(end_frame, fps)}'
+                        args += f' -to {format_timedelta(frame_to_timedelta(end_frame, fps), 6)}'
             return args
 
         def toflac() -> str:
@@ -371,13 +371,14 @@ class Chapters():
     fps: Fraction
 
     def __init__(self, chapter_source: PathLike | muxing.Chapter | list[muxing.Chapter] | src_file,
-                 fps: Fraction = Fraction(24000, 1001)) -> None:
+                 fps: Fraction = Fraction(24000, 1001), _print: bool = True) -> None:
         """
             Convenience class for chapters
 
             :param chapter_source:      Input either `vodesfunc.src_file` or (a list of) self defined chapters
             :param fps:                 Needed for timestamp convertion (Will be taken from your source clip
                                         if passed a `src_file`). Assumes 24000/1001 by default
+            :param _print:              Prints chapters after parsing and after trimming
         """
         self.fps = fps
         if isinstance(chapter_source, tuple):
@@ -385,31 +386,41 @@ class Chapters():
         elif isinstance(chapter_source, list):
             self.chapters = chapter_source
         elif isinstance(chapter_source, src_file):
-            self.chapters = get_chapters_from_srcfile(chapter_source)
+            self.chapters = get_chapters_from_srcfile(chapter_source, _print)
             self.fps = Fraction(chapter_source.src.fps_num, chapter_source.src.fps_den)
             if chapter_source.trim:
                 self.trim(chapter_source.trim[0], chapter_source.trim[1])
-            chapters: list[muxing.Chapter] = []
-            for chapter in self.chapters:
-                if chapter[0] < chapter_source.src_cut.num_frames:
-                    chapters.append(chapter)
-            self.chapters = chapters   
+                if _print:
+                    print('After trim:')
+                    self.print()
         elif isinstance(chapter_source, PathLike):
             # Handle both OGM .txt files and xml files maybe
             # Supposed to be used with something like setup.from_mkv()
             file = file if isinstance(chapter_source, Path) else Path(chapter_source)
             raise f'{_exPrefix}Chapters: No Chapterfile input supported (yet)'
-        pass
+        
+        # Convert all framenumbers to timedeltas
+        chapters = []
+        for ch in self.chapters:
+            if isinstance(ch[0], int):
+                current = list(ch)
+                current[0] = frame_to_timedelta(current[0], self.fps)
+                chapters.append(tuple(current))
+            else:
+                chapters.append(ch)
+        self.chapters = chapters
 
     def trim(self, trim_start: int = 0, trim_end: int = 0):
         if trim_start > 0:
             chapters: list[muxing.Chapter] = []
             for chapter in self.chapters:
-                if chapter[0] - trim_start < 0:
+                if timedelta_to_frame(chapter[0]) == 0:
                     chapters.append(chapter)
                     continue
+                if timedelta_to_frame(chapter[0]) - trim_start < 0:
+                    continue
                 current = list(chapter)
-                current[0] = current[0] - trim_start
+                current[0] = current[0] - frame_to_timedelta(trim_start, self.fps)
                 chapters.append(tuple(current))
 
             self.chapters = chapters
@@ -417,7 +428,7 @@ class Chapters():
             if trim_end > 0:
                 chapters: list[muxing.Chapter] = []
                 for chapter in self.chapters:
-                    if chapter[0] < trim_end:
+                    if timedelta_to_frame(chapter[0], self.fps) < trim_end:
                         chapters.append(chapter)
                 self.chapters = chapters
 
@@ -452,11 +463,18 @@ class Chapters():
             :param shift_amount:    Frames to shift by
         """
         ch = list(self.chapters[chapter])
-        shifted_frame = ch[0] + shift_amount
+        shifted_frame = ch[0] + frame_to_timedelta(shift_amount, self.fps)
         if shifted_frame > 0:
             ch[0] = shifted_frame
         self.chapters[chapter] = tuple(ch)
         return self
+
+    def print(self):
+        """
+            Prettier print for these because default timedelta formatting sucks
+        """
+        for (time, name) in self.chapters:
+            print(f'{name}: {format_timedelta(time)} | {timedelta_to_frame(time, self.fps)}')
 
     def to_file(self, out: PathLike = Path(os.getcwd())) -> str:
         """
@@ -470,7 +488,7 @@ class Chapters():
         else:
             out_file = out
         with open(out_file, 'w', encoding='UTF-8') as f:
-            f.writelines([f'CHAPTER{i:02d}={Convert.f2assts(chapter[0], self.fps)}\nCHAPTER{i:02d}NAME='
+            f.writelines([f'CHAPTER{i:02d}={format_timedelta(chapter[0])}\nCHAPTER{i:02d}NAME='
                           f'{chapter[1] if chapter[1] else ""}\n' for i, chapter in enumerate(self.chapters)])
         return out_file
 
@@ -582,7 +600,7 @@ def run_commandline(command: str, quiet: bool = True, shell: bool = False):
     p.wait()
 
 
-def get_chapters_from_srcfile(src: src_file) -> list[muxing.Chapter]:
+def get_chapters_from_srcfile(src: src_file, _print: bool = False) -> list[muxing.Chapter]:
     stream_dir = src.file.resolve().parent
     if stream_dir.name.lower() != 'stream':
         print(f'Your source file is not in a default bdmv structure!\nWill skip chapters.')
@@ -613,7 +631,8 @@ def get_chapters_from_srcfile(src: src_file) -> list[muxing.Chapter]:
         for i, playitem in enumerate(playlist.play_items):
             if playitem.clip_information_filename == src.file.stem and \
                     playitem.clip_codec_identifier.lower() == src.file.suffix.lower().split('.')[1]:
-                print(f'Found chapters for "{src.file.name}" in "{f.name}"')
+                if _print:
+                    print(f'Found chapters for "{src.file.name}" in "{f.name}":')
                 linked_marks = [mark for mark in marks if mark.ref_to_play_item_id == i]
                 try:
                     assert playitem.intime
@@ -629,10 +648,10 @@ def get_chapters_from_srcfile(src: src_file) -> list[muxing.Chapter]:
                         fps = Fraction(src.src_cut.fps_num, src.src_cut.fps_den)
 
                     for i, lmark in enumerate(linked_marks, start=1):
-                        frame = Convert.seconds2f((lmark.mark_timestamp - offset) / 45000, fps)
-                        if frame > src.src.num_frames - 1:
-                            continue
-                        chapters.append((frame, f'Chapter {i:02.0f}'))
+                        chapters.append((mpls_timestamp_to_timedelta(lmark.mark_timestamp - offset), f'Chapter {i:02.0f}'))
+                    if chapters and _print:
+                        for (time, name) in chapters:
+                            print(f'{name}: {format_timedelta(time)} | {timedelta_to_frame(time, fps)}')
 
         if chapters:
             break

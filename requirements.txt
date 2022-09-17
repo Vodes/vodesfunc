@@ -7,7 +7,6 @@ vsscale>=1.0.1
 fontTools>=4.37.1
 ebmlite>=3.3.0
 pyparsebluray>=0.1.4
-pytimeconv>=0.0.2
 Vapoursynth>=59
 # vardefunc>=0.7.2
 # Somewhat optional, only needed for vodes_rescale and only if using a mode > 0

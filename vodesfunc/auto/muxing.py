@@ -1,6 +1,7 @@
 from enum import IntEnum
 from pathlib import Path
 from typing import Optional
+from datetime import timedelta
 import os
 
 import ass
@@ -22,8 +23,8 @@ __all__: list[str] = [
     'VideoTrack', 'VT',
 ]
 
-# Start Frame, Optional Name
-Chapter = tuple[int, Optional[str]]
+# Timedelta (or frame, which will be converted internally), Optional Name
+Chapter = tuple[timedelta | int, Optional[str]]
 
 
 class TrackType(IntEnum):
