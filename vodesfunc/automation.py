@@ -389,7 +389,7 @@ class Chapters():
             self.chapters = get_chapters_from_srcfile(chapter_source, _print)
             self.fps = Fraction(chapter_source.src.fps_num, chapter_source.src.fps_den)
             if chapter_source.trim:
-                self.trim(chapter_source.trim[0], chapter_source.trim[1])
+                self.trim(chapter_source.trim[0], chapter_source.trim[1], chapter_source)
                 if _print:
                     print('After trim:')
                     self.print()
@@ -410,7 +410,7 @@ class Chapters():
                 chapters.append(ch)
         self.chapters = chapters
 
-    def trim(self, trim_start: int = 0, trim_end: int = 0):
+    def trim(self, trim_start: int = 0, trim_end: int = 0, src: src_file = None):
         if trim_start > 0:
             chapters: list[muxing.Chapter] = []
             for chapter in self.chapters:
@@ -421,6 +421,9 @@ class Chapters():
                     continue
                 current = list(chapter)
                 current[0] = current[0] - frame_to_timedelta(trim_start, self.fps)
+                if src:
+                    if current[0] > frame_to_timedelta(src.src_cut.num_frames - 1, self.fps):
+                        continue
                 chapters.append(tuple(current))
 
             self.chapters = chapters
@@ -648,7 +651,10 @@ def get_chapters_from_srcfile(src: src_file, _print: bool = False) -> list[muxin
                         fps = Fraction(src.src_cut.fps_num, src.src_cut.fps_den)
 
                     for i, lmark in enumerate(linked_marks, start=1):
-                        chapters.append((mpls_timestamp_to_timedelta(lmark.mark_timestamp - offset), f'Chapter {i:02.0f}'))
+                        time = mpls_timestamp_to_timedelta(lmark.mark_timestamp - offset)
+                        if time > frame_to_timedelta(src.src.num_frames - 1, fps):
+                            continue
+                        chapters.append((time, f'Chapter {i:02.0f}'))
                     if chapters and _print:
                         for (time, name) in chapters:
                             print(f'{name}: {format_timedelta(time)} | {timedelta_to_frame(time, fps)}')
