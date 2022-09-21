@@ -216,7 +216,7 @@ class Setup:
 
         def ffmpeg_header() -> str:
             ffmpeg_exe = check.check_FFmpeg(self.allow_binary_download)
-            return f'"{ffmpeg_exe}" -hide_banner -loglevel warning'
+            return f'"{ffmpeg_exe}" -hide_banner{" -loglevel warning" if quiet else ""}'
 
         def ffmpeg_seekargs() -> str:
             args = ''
@@ -229,6 +229,8 @@ class Setup:
                     else:
                         end_frame = clip.num_frames - abs(trim[1])
                         args += f' -to {format_timedelta(frame_to_timedelta(end_frame, fps))}'
+                if not quiet:
+                    print(args)
             return args
 
         def toflac() -> str:
@@ -537,6 +539,10 @@ class Mux():
                 continue
 
             raise f'{_exPrefix}.Mux: Only _track or Chapters types are supported as muxing input!'
+
+    def save_command(self, file: PathLike = None, append: bool = True):
+        if not file:
+            pass
 
     def run(self, print_command: bool = False) -> str:
         """
