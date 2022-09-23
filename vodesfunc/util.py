@@ -69,14 +69,15 @@ def src(filePath: str = None, force_lsmas: bool = False) -> vs.VideoNode:
         return core.dgdecodenv.DGSource(dgiFile.resolve(True))
 
 
-def set_output(clip: vs.VideoNode, name: str = None, frame_info: bool = False) -> vs.VideoNode:
+def set_output(clip: vs.VideoNode, name: str = None, frame_info: bool = False, allow_comp: bool = True) -> vs.VideoNode:
     """
     Outputs a clip. Less to type.
     Designed to be used with the good ol 'from vodesfunc import *' and the 'out' alias
     """
     if name is not None:
         clip = clip.std.SetFrameProp('Name', data=name)
-
+    if not allow_comp:
+        clip = clip.std.SetFrameProp('_VSPDisableComp', 1)
     if frame_info:
         output = _print_frameinfo(clip, name)
         output.set_output(len(vs.get_outputs()))

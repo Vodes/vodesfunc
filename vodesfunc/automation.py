@@ -555,7 +555,7 @@ class Mux():
         if print_command:
             print(f'\n\n{self.commandline}\n\n')
         code = subprocess.Popen(self.commandline).wait()
-        if self.setup.clean_work_dirs and code == 0:
+        if self.setup.clean_work_dirs == True and code == 0:
             sh.rmtree(self.setup.work_dir)
         print("Done.")
         return str(self.outfile.resolve())
