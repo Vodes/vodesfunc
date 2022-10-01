@@ -531,11 +531,13 @@ class Mux():
                 chapterfile = track.to_file(setup.work_dir)
                 self.commandline += f' --chapters "{chapterfile}"'
                 continue
-            elif isinstance(track, PathLike):
-                # Failsave for if someone passes Chapters().to_file()
-                chapterfile = track if isinstance(chapterfile, Path) else Path(chapterfile)
-                if chapterfile.name.lower() == 'chapters.txt':
-                    self.commandline += f' --chapters "{chapterfile}"'
+            elif isinstance(track, PathLike) or isinstance(track, GlobSearch):
+                # Failsave for if someone passes Chapters().to_file() or a txt/xml file
+                if isinstance(track, GlobSearch):
+                    track = track.paths[0] if isinstance(track.paths, list) else track.paths
+                track = track if isinstance(track, Path) else Path(track)
+                if track.suffix.lower() in ['.txt', '.xml']:
+                    self.commandline += f' --chapters "{track.resolve()}"'
                 continue
 
             raise f'{_exPrefix}.Mux: Only _track or Chapters types are supported as muxing input!'
