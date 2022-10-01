@@ -460,6 +460,26 @@ class Chapters():
         self.chapters = chapters
         return self
 
+    def add(self, chapters: muxing.Chapter | list[muxing.Chapter], index: int = 0) -> "Chapters":
+        if isinstance(chapters, tuple):
+            chapters = [chapters]
+        else:
+            chapters = chapters
+        
+        converted = []
+        for ch in chapters:
+            if isinstance(ch[0], int):
+                current = list(ch)
+                current[0] = frame_to_timedelta(current[0], self.fps)
+                converted.append(tuple(current))
+            else:
+                converted.append(ch)
+
+        for ch in converted:
+            self.chapters.insert(index, ch)
+            index += 1
+        return self
+
     def shift_chapter(self, chapter: int = 0, shift_amount: int = 0) -> "Chapters":
         """
             Used to shift a single chapter by x frames
@@ -474,12 +494,13 @@ class Chapters():
         self.chapters[chapter] = tuple(ch)
         return self
 
-    def print(self):
+    def print(self) -> "Chapters":
         """
             Prettier print for these because default timedelta formatting sucks
         """
         for (time, name) in self.chapters:
             print(f'{name}: {format_timedelta(time)} | {timedelta_to_frame(time, self.fps)}')
+        return self
 
     def to_file(self, out: PathLike = Path(os.getcwd())) -> str:
         """
