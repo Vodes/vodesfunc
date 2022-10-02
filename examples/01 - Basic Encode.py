@@ -1,7 +1,7 @@
 import vapoursynth as vs
 core = vs.core
 
-from vsutil import depth
+from vstools import depth
 
 import vodesfunc as vof
 

@@ -2,7 +2,7 @@ from typing import Any, Callable
 
 import vapoursynth as vs
 from vskernels import Catrom, Kernel
-from vsutil import Range, depth, get_depth, get_y, iterate
+from vstools import depth, get_depth, get_y, iterate, ColorRange
 
 core = vs.core
 
@@ -91,7 +91,7 @@ def vodes_rescale(
 
     if credit_mask is None and mask_threshold > 0:
         credit_mask = core.std.Expr([depth(y, 32), depth(ref_y, 32)], f"x y - abs {mask_threshold} < 0 1 ?")
-        credit_mask = depth(credit_mask, 16, range=Range.FULL, range_in=Range.FULL)
+        credit_mask = depth(credit_mask, 16, range_out=ColorRange.FULL, range_in=ColorRange.FULL)
         credit_mask = core.rgvs.RemoveGrain(credit_mask, mode=6)
         credit_mask = iterate(credit_mask, core.std.Maximum, 2)
         credit_mask = iterate(credit_mask, core.std.Inflate, 2)

@@ -5,7 +5,7 @@ from functools import partial
 from typing import Any
 
 import vapoursynth as vs
-from vsutil import depth, get_y
+from vstools import depth, get_y
 
 core = vs.core
 
