@@ -94,7 +94,7 @@ def vodes_rescale(
         credit_mask = depth(credit_mask, 16, range_out=ColorRange.FULL, range_in=ColorRange.FULL)
         credit_mask = core.rgvs.RemoveGrain(credit_mask, mode=6)
         credit_mask = iterate(credit_mask, core.std.Maximum, 2)
-        credit_mask = iterate(credit_mask, core.std.Inflate, 2)
+        credit_mask = iterate(credit_mask, core.std.Inflate, 2 if do_post_double is None else 4)
         rescaled_y = core.std.MaskedMerge(rescaled_y, y, credit_mask)
     elif credit_mask is not None:
         rescaled_y = core.std.MaskedMerge(rescaled_y, y, credit_mask)
