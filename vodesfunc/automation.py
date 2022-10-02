@@ -6,6 +6,7 @@ from configparser import ConfigParser
 from fractions import Fraction
 from pathlib import Path
 from typing import Callable
+from datetime import timedelta
 
 import vapoursynth as vs
 from pyparsebluray import mpls
@@ -489,8 +490,10 @@ class Chapters():
         """
         ch = list(self.chapters[chapter])
         shifted_frame = ch[0] + frame_to_timedelta(shift_amount, self.fps)
-        if shifted_frame > 0:
+        if shifted_frame.total_seconds() > 0:
             ch[0] = shifted_frame
+        else:
+            ch[0] = timedelta(seconds=0)
         self.chapters[chapter] = tuple(ch)
         return self
 
