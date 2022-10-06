@@ -120,7 +120,7 @@ def vodes_rescale(
             line_mask if isinstance(line_mask, vs.VideoNode) else blank_mask]
 
 
-def nnedi_double(clip: vs.VideoNode, opencl: bool = True,
+def nnedi_double(clip: vs.VideoNode, opencl: bool = True, correct_shift: bool = True,
                  ediargs: dict[str, Any] = {"qual": 2, "nsize": 4, "nns": 4, "pscrn": 1}) -> vs.VideoNode:
     """
     Simple utility function for doubling a clip using znedi or nnedi3cl (also fixes the shift)
@@ -134,5 +134,7 @@ def nnedi_double(clip: vs.VideoNode, opencl: bool = True,
         .nnedi3cl.NNEDI3CL(dh=True, field=0, **ediargs).std.Transpose() \
         if opencl else y.znedi3.nnedi3(dh=True, field=0, **ediargs).std.Transpose() \
         .znedi3.nnedi3(dh=True, field=0, **ediargs).std.Transpose()
-    doubled_y = doubled_y.resize.Bicubic(src_top=.5, src_left=.5)
+    
+    if correct_shift:
+        doubled_y = doubled_y.resize.Bicubic(src_top=.5, src_left=.5)
     return doubled_y
