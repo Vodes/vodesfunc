@@ -14,13 +14,14 @@ __all__: list[str] = [
 ]
 
 
-def src(filePath: str = None, force_lsmas: bool = False) -> vs.VideoNode:
+def src(filePath: str = None, force_lsmas: bool = False, delete_dgi_log: bool = True) -> vs.VideoNode:
     """
         Uses dgindex as Source and requires dgindexnv in path
         to generate files if they don't exist.
 
         :param filepath:        Path to video or dgi file
         :param force_lsmas:     Skip dgsource entirely and use lsmas
+        :param delete_dgi_log:  Delete the .log files dgindexnv creates
         :return:                Video Node
     """
     if filePath.lower().endswith('.dgi'):
@@ -29,7 +30,7 @@ def src(filePath: str = None, force_lsmas: bool = False) -> vs.VideoNode:
     import shutil as sh
     from pathlib import Path
 
-    forceFallBack = sh.which('dgindexnv') is None
+    forceFallBack = sh.which('dgindexnv') is None or not hasattr(core, "dgdecodenv")
 
     # I don't want that to be a hard dependency :trollhd:
     try:
@@ -62,9 +63,9 @@ def src(filePath: str = None, force_lsmas: bool = False) -> vs.VideoNode:
         print("Generating dgi file...")
         import os
         import subprocess as sub
-        sub.Popen(f"dgindexnv -i \"{path.resolve(True)}\" -h -o \"{dgiFile.resolve(False)}\" -e",
-                  shell=True, stdout=sub.DEVNULL).wait()
-        if path.with_suffix('.log').exists():
+        sub.Popen(f"dgindexnv -i \"{path.name}\" -h -o \"{dgiFile.name}\" -e",
+                  shell=True, stdout=sub.DEVNULL, cwd=path.parent.resolve(True)).wait()
+        if path.with_suffix('.log').exists() and delete_dgi_log:
             os.remove(path.with_suffix('.log').resolve(True))
         return core.dgdecodenv.DGSource(dgiFile.resolve(True))
 
