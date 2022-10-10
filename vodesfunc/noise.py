@@ -21,6 +21,7 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
         :param strength:            Grainer strength. Use a list to specify [luma, chroma] graining.
                                     Default chroma grain is luma / 2.
         :param size:                Grain size. Will be passed as xsize and ysize. Can be adjusted individually with a list.
+        :param type:                See vs-noise github for 0-3. Type 4 is type 2 on a higher res clip and downscaled
         :param static:              Static or dynamic grain.
         :param fade_edges:          Keeps grain from exceeding legal range.
                                     With this, values whiclip.height go towards the neutral point, but would generate
@@ -47,8 +48,16 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
         return scale_value(value, 8, ogdepth, scale_offsets=not tv_range, chroma=chroma)
 
     neutral = [get_neutral_value(clip), get_neutral_value(clip, True)]
-    blank = clip.std.BlankClip(clip.width, clip.height, color=normalize_seq(neutral, clip.format.num_planes))
-    grained = blank.noise.Add(strength[0], strength[1], type, xsize=size[0], ysize=size[1], seed=seed, constant=static, **kwargs)
+    if type == 4:
+        from vskernels import BicubicDidee
+        blank = clip.std.BlankClip(clip.width * 1.3, clip.height * 1.3, color=normalize_seq(neutral, clip.format.num_planes))
+        grained = blank.noise.Add(strength[0], strength[1], type=2, xsize=size[0] * 0.9, ysize=size[1] * 0.9, seed=seed, constant=static, **kwargs)
+        grained = BicubicDidee().scale(grained, clip.width, clip.height)
+    elif type > 4 or type < 0:
+        raise ValueError('adaptive_grain: Type has to be a number between 0 and 4')
+    else: 
+        blank = clip.std.BlankClip(clip.width, clip.height, color=normalize_seq(neutral, clip.format.num_planes))
+        grained = blank.noise.Add(strength[0], strength[1], type=type, xsize=size[0], ysize=size[1], seed=seed, constant=static, **kwargs)
 
     if not static and temporal_average > 0:
         grained = core.std.Merge(grained, core.std.AverageFrames(grained, weights=[1] * 3), weight=temporal_average / 100)

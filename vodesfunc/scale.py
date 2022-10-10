@@ -56,7 +56,7 @@ def vodes_rescale(
         descale_kernel, Kernel) else descale_kernel[1]
 
     if mode == 0:
-        doubled_y = nnedi_double(descaled_y, opencl, ediargs)
+        doubled_y = nnedi_double(descaled_y, opencl, True, ediargs)
     elif mode == 1:
         try:
             import vardefunc as vdf
@@ -69,7 +69,7 @@ def vodes_rescale(
             doubled_y = get_y(doubled)
     elif mode == 2:
         import vardefunc as vdf
-        nnedi = nnedi_double(descaled_y, opencl, ediargs)
+        nnedi = nnedi_double(descaled_y, opencl, True, ediargs)
         fsrcnnx = vdf.fsrcnnx_upscale(descaled_y, height=descaled_y.height * 2, downscaler=None, profile='zastin', shader_file=shaderfile,
                                       upscaled_smooth=nnedi,
                                       sharpener=lambda clip: vdf.sharp.z4usm(clip, modeargs.get("radius", 2), modeargs.get("strength", 35)))
