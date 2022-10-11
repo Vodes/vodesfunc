@@ -237,7 +237,7 @@ class Setup:
         def toflac() -> str:
             is_intermediary = codec.lower() != 'flac'
             compression_level = "10" if not is_intermediary else "0"
-            commandline = f'{ffmpeg_header()} -i "{file.resolve()}" -map 0:a:{track} {ffmpeg_seekargs()} -f flac -compression_level {compression_level}'
+            commandline = f'{ffmpeg_header()} -i "{file.resolve()}" -map_metadata -1 -map_chapters -1 -map 0:a:{track} {ffmpeg_seekargs()} -f flac -compression_level {compression_level}'
             if (dither_flac and codec.lower() == 'flac') or always_dither:
                 commandline += ' -sample_fmt s16 -ar 48000 -resampler soxr -precision 28 -dither_method shibata'
             if codec.lower() != 'opus':
@@ -264,7 +264,7 @@ class Setup:
                 return out_file
             print(f'Trimming audio track {track} for EP{self.episode}...'
                 if trim else f'Extracting audio track {track} for EP{self.episode}')
-            commandline = f'{ffmpeg_header()} -i "{file.resolve()}" -map 0:a:{track} {ffmpeg_seekargs()} -c:a copy "{out_file}"'
+            commandline = f'{ffmpeg_header()} -i "{file.resolve()}" -map_metadata -1 -map_chapters -1 -map 0:a:{track} {ffmpeg_seekargs()} -c:a copy "{out_file}"'
             run_commandline(commandline, quiet, False)
             print('Done.\n')
             return out_file
