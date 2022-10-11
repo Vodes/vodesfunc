@@ -41,7 +41,8 @@ def vodes_rescale(
     :param shaderfile:      Pass your FSRCNNX Shaderfile (my path as default lol)
     :return:                List of rescaled, reference upscale, credit mask and line mask
     """
-    clip = depth(src, 16)
+    wdepth = 16 if get_depth(src) < 16 else get_depth(src)
+    clip = depth(src, wdepth)
     y = clip if clip.format.color_family == vs.GRAY else get_y(clip)
 
     if height is None or height < 1:
@@ -63,7 +64,7 @@ def vodes_rescale(
             doubled_y = vdf.fsrcnnx_upscale(descaled_y, height=descaled_y.height * 2, downscaler=None, profile='zastin', shader_file=shaderfile,
                                             sharpener=lambda clip: vdf.sharp.z4usm(clip, modeargs.get("radius", 2), modeargs.get("strength", 50)))
         except:
-            trash = core.std.BlankClip(descaled_y, format=vs.YUV420P16)
+            trash = core.std.BlankClip(descaled_y, format=clip.format)
             doubled = core.std.ShufflePlanes([descaled_y, trash], [0, 1, 2], vs.YUV) \
                 .placebo.Shader(shader=shaderfile, filter='box', width=descaled_y.width*2, height=descaled_y.height*2)
             doubled_y = get_y(doubled)
@@ -85,13 +86,14 @@ def vodes_rescale(
 
     if isinstance(downscaler, str) and downscaler.lower() == 'ssim':
         import vsscale as vss
-        rescaled_y = vss.ssim_downsample(doubled_y, src.width, src.height)
+        rescaled_y = vss.ssim_downsample(depth(doubled_y, 16), src.width, src.height)
+        rescaled_y = depth(doubled_y, wdepth)
     else:
         rescaled_y = downscaler.scale(doubled_y, src.width, src.height)
 
     if credit_mask is None and mask_threshold > 0:
         credit_mask = core.std.Expr([depth(y, 32), depth(ref_y, 32)], f"x y - abs {mask_threshold} < 0 1 ?")
-        credit_mask = depth(credit_mask, 16, range_out=ColorRange.FULL, range_in=ColorRange.FULL)
+        credit_mask = depth(credit_mask, wdepth, range_out=ColorRange.FULL, range_in=ColorRange.FULL)
         credit_mask = core.rgvs.RemoveGrain(credit_mask, mode=6)
         credit_mask = iterate(credit_mask, core.std.Maximum, 2)
         credit_mask = iterate(credit_mask, core.std.Inflate, 2 if do_post_double is None else 4)
