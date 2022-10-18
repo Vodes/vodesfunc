@@ -11,13 +11,11 @@ from datetime import timedelta
 import vapoursynth as vs
 from pyparsebluray import mpls
 
-from .auto import check, muxing
+from .auto import muxing
+from .auto.download import get_executable
 from .auto.calc import timedelta_to_frame, frame_to_timedelta, mpls_timestamp_to_timedelta, format_timedelta
 from .auto.muxing import VT, AT, ST, VideoTrack, AudioTrack, SubTrack, Attachment, GlobSearch, TrackType
-from .types import PathLike, Trim, Zone
-
-_exPrefix = 'vodesfunc.automation.'
-
+from .types import PathLike, Trim, Zone, Chapter
 
 __all__: list[str] = [
     'Chapters',
@@ -136,7 +134,7 @@ class Setup:
             :param print_command:   Prints the final x265 command before running it
             :return:                Absolute filepath for resulting video file
         """
-        x265_exe = check.check_x265(self.allow_binary_download)
+        x265_exe = get_executable('x265', self.allow_binary_download)
         args = settings
         # TODO: range, matrix, etc. parsing from the clip
         args += f' --output-depth {clip.format.bits_per_sample} --range limited --colorprim 1 --transfer 1 --colormatrix 1'
@@ -158,7 +156,7 @@ class Setup:
                 if qpfile:
                     args += f' --qpfile "{qpfile}"'
             else:
-                print(_exPrefix + "encode_video: No 'src' parameter passed, Skipping qpfile creation!")
+                print("encode_video: No 'src' parameter passed, Skipping qpfile creation!")
 
         outpath = self.work_dir.joinpath(self.episode + ".265").resolve()
         x265_command = f'"{x265_exe}" -o "{outpath}" - --y4m ' + args.strip()
@@ -216,7 +214,7 @@ class Setup:
         base_path = os.path.join(self.work_dir.resolve(), file.stem + "_" + str(track))
 
         def ffmpeg_header() -> str:
-            ffmpeg_exe = check.check_FFmpeg(self.allow_binary_download)
+            ffmpeg_exe = get_executable('ffmpeg', self.allow_binary_download)
             return f'"{ffmpeg_exe}" -hide_banner{" -loglevel warning" if quiet else ""}'
 
         def ffmpeg_seekargs() -> str:
@@ -273,7 +271,7 @@ class Setup:
             if q > 127 or q < 0:
                 raise ValueError(f'encode_audio: QAAC tvbr must be in the range of 0 - 127')
             flac = toflac()
-            qaac = check.check_QAAC(self.allow_binary_download)
+            qaac =  get_executable('qaac', self.allow_binary_download)
             out_file = base_path + ".m4a"
             if not should_create_again(out_file):
                 return out_file
@@ -288,7 +286,7 @@ class Setup:
             if q > 512 or q < 8:
                 raise ValueError(f'encode_audio: Opus bitrate must be in the range of 8 - 512 (kbit/s)')
             commandline = toflac()
-            opusenc = check.check_OpusEnc(self.allow_binary_download)
+            opusenc = get_executable('opusenc', self.allow_binary_download)
             out_file = base_path + ".ogg"
             if not should_create_again(out_file):
                 return out_file
@@ -328,8 +326,8 @@ class Setup:
             :return:            Path to resulting mkv or txt (if chapters)
         """
         mkv = mkv if isinstance(mkv, Path) else Path(mkv)
-        mkvmerge_exe = check.check_mkvmerge(self.allow_binary_download)
-        mkvextract_exe = check.check_mkvextract(self.allow_binary_download)
+        mkvmerge_exe = get_executable('mkvmerge', self.allow_binary_download)
+        mkvextract_exe = get_executable('mkvextract', self.allow_binary_download)
         out_file = f"{mkv.stem}_{TrackType(type).name}_{str(track)}.{'txt' if type == TrackType.CHAPTERS else 'mkv'}"
         out_path = os.path.join(self.work_dir.resolve(), out_file)
 
@@ -338,7 +336,7 @@ class Setup:
         else:
             commandline = f'"{mkvmerge_exe}" -o "{out_path} '
             if type != TrackType.ATTACHMENT and track < 0:
-                raise ValueError(f'{_exPrefix}.from_mkv: Please specify a track for anything but \'Attachment\'')
+                raise ValueError(f'from_mkv: Please specify a track for anything but \'Attachment\'')
             match type:
                 case TrackType.VIDEO:
                     commandline += f' -A -d {track} -S -B -T -M --no-chapters --no-global-tags'
@@ -353,7 +351,7 @@ class Setup:
         p = subprocess.Popen(commandline, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         output, error = p.communicate()
         if p.returncode != 0:
-            s = f"{_exPrefix}.from_mkv: {str(output)} \n{str(error)}"
+            s = f"from_mkv: {str(output)} \n{str(error)}"
             if p.returncode == 1:
                 print(f"WARN: {s}")
             else:
@@ -370,10 +368,10 @@ class Setup:
 
 class Chapters():
 
-    chapters: list[muxing.Chapter] = []
+    chapters: list[Chapter] = []
     fps: Fraction
 
-    def __init__(self, chapter_source: PathLike | muxing.Chapter | list[muxing.Chapter] | src_file,
+    def __init__(self, chapter_source: PathLike | Chapter | list[Chapter] | src_file,
                  fps: Fraction = Fraction(24000, 1001), _print: bool = True) -> None:
         """
             Convenience class for chapters
@@ -400,7 +398,7 @@ class Chapters():
             # Handle both OGM .txt files and xml files maybe
             # Supposed to be used with something like setup.from_mkv()
             file = file if isinstance(chapter_source, Path) else Path(chapter_source)
-            raise f'{_exPrefix}Chapters: No Chapterfile input supported (yet)'
+            raise f'Chapters: No Chapterfile input supported (yet)'
         
         # Convert all framenumbers to timedeltas
         chapters = []
@@ -461,7 +459,7 @@ class Chapters():
         self.chapters = chapters
         return self
 
-    def add(self, chapters: muxing.Chapter | list[muxing.Chapter], index: int = 0) -> "Chapters":
+    def add(self, chapters: Chapter | list[Chapter], index: int = 0) -> "Chapters":
         if isinstance(chapters, tuple):
             chapters = [chapters]
         else:
@@ -542,7 +540,7 @@ class Mux():
         mkvtitle = re.sub('\$ep\$', setup.episode, mkvtitle)
 
         self.setup = setup
-        mkvmerge = check.check_mkvmerge(self.setup.allow_binary_download)
+        mkvmerge = get_executable('mkvmerge', self.allow_binary_download)
 
         self.outfile = Path(os.path.join(Path(setup.out_dir), filename + ".mkv"))
         self.commandline = f'"{mkvmerge}" -o "{self.outfile.resolve()}" --title "{mkvtitle}"'
@@ -564,7 +562,7 @@ class Mux():
                     self.commandline += f' --chapters "{track.resolve()}"'
                 continue
 
-            raise f'{_exPrefix}.Mux: Only _track or Chapters types are supported as muxing input!'
+            raise f'Mux: Only _track or Chapters types are supported as muxing input!'
 
     def save_command(self, file: PathLike = None, append: bool = True):
         if not file:
@@ -635,7 +633,7 @@ def run_commandline(command: str, quiet: bool = True, shell: bool = False):
     p.wait()
 
 
-def get_chapters_from_srcfile(src: src_file, _print: bool = False) -> list[muxing.Chapter]:
+def get_chapters_from_srcfile(src: src_file, _print: bool = False) -> list[Chapter]:
     stream_dir = src.file.resolve().parent
     if stream_dir.name.lower() != 'stream':
         print(f'Your source file is not in a default bdmv structure!\nWill skip chapters.')
@@ -645,7 +643,7 @@ def get_chapters_from_srcfile(src: src_file, _print: bool = False) -> list[muxin
         print(f'PLAYLIST folder couldn\'t have been found!\nWill skip chapters.')
         return None
 
-    chapters: list[muxing.Chapter] = []
+    chapters: list[Chapter] = []
     for f in playlist_dir.rglob("*"):
         if not os.path.isfile(f) or f.suffix.lower() != '.mpls':
             continue

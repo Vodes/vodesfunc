@@ -4,15 +4,10 @@ from pathlib import Path
 
 import py7zr as p7z
 import wget
-
-"""
-Dependencies so far:
-py7zr, wget,
-"""
-
-_exPrefix = 'vodesfunc.automation.download: '
+import shutil as sh
 
 __all__: list[str] = [
+    'get_executable',
     'download_binary',
     'unpack_all',
 ]
@@ -26,10 +21,19 @@ types: dict = {
     'mkvextract': 'https://www.fosshub.com/MKVToolNix.html?dwl=mkvtoolnix-64-bit-70.0.0.7z'
 }
 
+def get_executable(type: str, can_download: bool = True) -> str:
+    path = sh.which(type)
+    if path is None:
+        if not can_download:
+            raise Exception(f"{type.upper()} executable not found in path!")
+        else:
+            path = download_binary(type.lower())
+
+    return path
 
 def download_binary(type: str) -> str:
     if os.name != 'nt':
-        raise EnvironmentError(_exPrefix + 'Of course only Windows is supported for downloading of binaries!')
+        raise EnvironmentError('Of course only Windows is supported for downloading of binaries!')
 
     binary_dir = Path(os.path.join(os.getcwd(), '_binaries'))
     binary_dir.mkdir(exist_ok=True)

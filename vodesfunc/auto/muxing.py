@@ -6,9 +6,7 @@ import os
 
 import ass
 from .fonts import validate_and_save_fonts
-from ..types import PathLike
-
-_exPrefix = 'vodesfunc.automation.muxing:'
+from ..types import PathLike, Chapter
 
 __all__: list[str] = [
     '_track',
@@ -16,16 +14,11 @@ __all__: list[str] = [
     'AudioTrack', 'AT',
     'Chapter',
     'GlobSearch',
-    'make_iterable',
     'MkvTrack',
     'SubTrack', 'ST',
     'TrackType',
     'VideoTrack', 'VT',
 ]
-
-# Timedelta (or frame, which will be converted internally), Optional Name
-Chapter = tuple[timedelta | int, Optional[str]]
-
 
 class TrackType(IntEnum):
     VIDEO = 1
@@ -103,7 +96,7 @@ class _track():
         if self.type == TrackType.ATTACHMENT:
             is_font = self.file.suffix.lower() in ['.ttf', '.otf']
             if not is_font and not self.lang:
-                raise ValueError(f'{_exPrefix} Please specify a mimetype for the attachments if they\'re not fonts!')
+                raise ValueError(f'Please specify a mimetype for the attachments if they\'re not fonts!')
             if not is_font:
                 return f' --attachment-mime-type {self.lang} --attach-file "{self.file.resolve()}"'
             else:
@@ -357,19 +350,6 @@ class MkvTrack(_track):
         if isinstance(file, GlobSearch):
             file = file.paths[0] if isinstance(file.paths, list) else file.paths
         super().__init__(file, TrackType.MKV, mkvmerge_args, '', False, False, 0)
-
-
-def make_iterable(thing: any) -> any:
-    if isinstance(thing, list):
-        out = []
-        for entry in thing:
-            if isinstance(entry, PathLike):
-                entry = Path(entry).resolve()
-            out.append(entry)
-        return [out]
-    else:
-        return [thing, ]
-
 
 VT = VideoTrack
 AT = AudioTrack
