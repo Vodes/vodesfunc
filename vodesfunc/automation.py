@@ -502,11 +502,11 @@ class Mux():
 
             :param tracks:      However many track objects you want
         """
-        filename = re.sub('\$show\$', setup.show_name, setup.out_name)
-        filename = re.sub('\$ep\$', setup.episode, filename)
+        filename = re.sub(r'\$show\$', setup.show_name, setup.out_name)
+        filename = re.sub(r'\$ep\$', setup.episode, filename)
 
-        mkvtitle = re.sub('\$show\$', setup.show_name, setup.mkv_title_naming)
-        mkvtitle = re.sub('\$ep\$', setup.episode, mkvtitle)
+        mkvtitle = re.sub(r'\$show\$', setup.show_name, setup.mkv_title_naming)
+        mkvtitle = re.sub(r'\$ep\$', setup.episode, mkvtitle)
 
         self.setup = setup
         mkvmerge = get_executable('mkvmerge', self.setup.allow_binary_download)
