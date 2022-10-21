@@ -540,7 +540,7 @@ class Mux():
         mkvtitle = re.sub('\$ep\$', setup.episode, mkvtitle)
 
         self.setup = setup
-        mkvmerge = get_executable('mkvmerge', self.allow_binary_download)
+        mkvmerge = get_executable('mkvmerge', self.setup.allow_binary_download)
 
         self.outfile = Path(os.path.join(Path(setup.out_dir), filename + ".mkv"))
         self.commandline = f'"{mkvmerge}" -o "{self.outfile.resolve()}" --title "{mkvtitle}"'
