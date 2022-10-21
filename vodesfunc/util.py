@@ -1,8 +1,9 @@
-from functools import partial
-
 import vapoursynth as vs
 
-from .automation import src_file
+from functools import partial
+from typing import Callable
+from pathlib import Path
+from .types import PathLike, Trim
 
 core = vs.core
 
@@ -10,9 +11,41 @@ core = vs.core
 __all__: list[str] = [
     'set_output_source', 'out_src',
     'set_output', 'out',
-    'src', 'source',
+    'src_file', 'SRC_FILE', 'src', 'source',
 ]
 
+class src_file:
+
+    file: Path
+    src: vs.VideoNode
+    src_cut: vs.VideoNode
+    trim: Trim = None
+
+    def __init__(self, file: PathLike, trim_start: int = 0, trim_end: int = 0, idx: Callable[[str], vs.VideoNode] = None, force_lsmas: bool = False) -> None:
+        """
+            Custom `FileInfo` kind of thing for convenience
+
+            :param file:            Either a string based filepath or a Path object
+            :param trim_start:      At what frame the `src_cut` clip should start
+            :param trim_end:        At what frame the `src_cut` clip should end
+            :param idx:             Indexer for the input file. Pass a function that takes a string in and returns a vs.VideoNode.\nDefaults to `vodesfunc.src`
+            :param force_lsmas:     Forces the use of lsmas inside of `vodesfunc.src`
+        """
+        self.file = file if isinstance(file, Path) else Path(file)
+        self.src = idx(str(self.file.resolve())) if idx else src(str(self.file.resolve()), force_lsmas)
+        if trim_start != 0 or trim_end != 0:
+            self.trim = (trim_start, trim_end)
+            if trim_start != 0 and trim_end != 0:
+                self.src_cut = self.src[trim_start: trim_end]
+            else:
+                if trim_start != 0:
+                    self.src_cut = self.src[trim_start:]
+                else:
+                    self.src_cut = self.src[:trim_end]
+        else:
+            self.src_cut = self.src
+
+SRC_FILE = src_file
 
 def src(filePath: str = None, force_lsmas: bool = False, delete_dgi_log: bool = True) -> vs.VideoNode:
     """

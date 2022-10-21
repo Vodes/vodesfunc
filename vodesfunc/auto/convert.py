@@ -7,7 +7,8 @@ __all__: list[str] = [
     'mpls_timestamp_to_timedelta',
     'timedelta_to_frame',
     'frame_to_timedelta',
-    'format_timedelta'
+    'format_timedelta',
+    'timedelta_from_formatted'
 ]
 
 def _fraction_to_decimal(f: Fraction) -> Decimal:
@@ -38,3 +39,11 @@ def format_timedelta(time: timedelta, precision: int = 3) -> str:
     m %= 60
     return f'{h:02d}:{m:02d}:{s:02d}.{str(rounded).split(".")[1].ljust(precision, "0")}'
 
+def timedelta_from_formatted(formatted: str) -> timedelta:
+    # 00:05:25.534...
+    seconds: float = 0.0
+    split = formatted.split(':')
+    seconds += float(split[0]) * 3600
+    seconds += float(split[1]) * 60
+    seconds += float(split[2])
+    return timedelta(seconds=seconds)

@@ -9,60 +9,25 @@ from typing import Callable
 from datetime import timedelta
 
 import vapoursynth as vs
-from pyparsebluray import mpls
 
 from .auto import muxing
 from .auto.download import get_executable
-from .auto.calc import timedelta_to_frame, frame_to_timedelta, mpls_timestamp_to_timedelta, format_timedelta
+from .auto.convert import timedelta_to_frame, frame_to_timedelta, format_timedelta
+from .auto.parsing import parse_ogm, parse_xml, parse_src_file
 from .auto.muxing import VT, AT, ST, VideoTrack, AudioTrack, SubTrack, Attachment, GlobSearch, TrackType
 from .types import PathLike, Trim, Zone, Chapter
+from .util import src_file
 
 __all__: list[str] = [
     'Chapters',
-    'get_chapters_from_srcfile',
     'light_sucks',
     'Mux',
     'settings_builder', 'sb',
     'Setup',
-    'src_file', 'SRC_FILE',
     'VT', 'AT', 'ST',
     'VideoTrack', 'AudioTrack', 'SubTrack',
     'Attachment', 'GlobSearch'
 ]
-
-
-class src_file:
-
-    file: Path
-    src: vs.VideoNode
-    src_cut: vs.VideoNode
-    trim: Trim = None
-
-    def __init__(self, file: PathLike, trim_start: int = 0, trim_end: int = 0, idx: Callable[[str], vs.VideoNode] = None, force_lsmas: bool = False) -> None:
-        """
-            Custom `FileInfo` kind of thing for convenience
-
-            :param file:            Either a string based filepath or a Path object
-            :param trim_start:      At what frame the `src_cut` clip should start
-            :param trim_end:        At what frame the `src_cut` clip should end
-            :param idx:             Indexer for the input file. Pass a function that takes a string in and returns a vs.VideoNode.\nDefaults to `vodesfunc.src`
-            :param force_lsmas:     Forces the use of lsmas inside of `vodesfunc.src`
-        """
-        from vodesfunc import source
-        self.file = file if isinstance(file, Path) else Path(file)
-        self.src = idx(str(self.file.resolve())) if idx else source(str(self.file.resolve()), force_lsmas)
-        if trim_start != 0 or trim_end != 0:
-            self.trim = (trim_start, trim_end)
-            if trim_start != 0 and trim_end != 0:
-                self.src_cut = self.src[trim_start: trim_end]
-            else:
-                if trim_start != 0:
-                    self.src_cut = self.src[trim_start:]
-                else:
-                    self.src_cut = self.src[:trim_end]
-        else:
-            self.src_cut = self.src
-
 
 class Setup:
     """
@@ -371,7 +336,7 @@ class Chapters():
     chapters: list[Chapter] = []
     fps: Fraction
 
-    def __init__(self, chapter_source: PathLike | Chapter | list[Chapter] | src_file,
+    def __init__(self, chapter_source: PathLike | GlobSearch | Chapter | list[Chapter] | src_file,
                  fps: Fraction = Fraction(24000, 1001), _print: bool = True) -> None:
         """
             Convenience class for chapters
@@ -387,18 +352,22 @@ class Chapters():
         elif isinstance(chapter_source, list):
             self.chapters = chapter_source
         elif isinstance(chapter_source, src_file):
-            self.chapters = get_chapters_from_srcfile(chapter_source, _print)
+            self.chapters = parse_src_file(chapter_source, _print)
             self.fps = Fraction(chapter_source.src.fps_num, chapter_source.src.fps_den)
             if chapter_source.trim:
                 self.trim(chapter_source.trim[0], chapter_source.trim[1], chapter_source)
                 if _print:
                     print('After trim:')
                     self.print()
-        elif isinstance(chapter_source, PathLike):
-            # Handle both OGM .txt files and xml files maybe
-            # Supposed to be used with something like setup.from_mkv()
-            file = file if isinstance(chapter_source, Path) else Path(chapter_source)
-            raise f'Chapters: No Chapterfile input supported (yet)'
+        else:
+            # Handle both OGM .txt files and xml files
+            if isinstance(chapter_source, GlobSearch):
+                chapter_source = chapter_source.paths[0] if isinstance(chapter_source.paths, list) else chapter_source.paths
+            chapter_source = chapter_source if isinstance(chapter_source, Path) else Path(chapter_source)
+
+            self.chapters = parse_xml(chapter_source) if chapter_source.suffix.lower() == '.xml' else parse_ogm(chapter_source)
+            if _print:
+                self.print()
         
         # Convert all framenumbers to timedeltas
         chapters = []
@@ -564,10 +533,6 @@ class Mux():
 
             raise f'Mux: Only _track or Chapters types are supported as muxing input!'
 
-    def save_command(self, file: PathLike = None, append: bool = True):
-        if not file:
-            pass
-
     def run(self, print_command: bool = False) -> str:
         """
             Starts the muxing process
@@ -632,68 +597,4 @@ def run_commandline(command: str, quiet: bool = True, shell: bool = False):
     
     p.wait()
 
-
-def get_chapters_from_srcfile(src: src_file, _print: bool = False) -> list[Chapter]:
-    stream_dir = src.file.resolve().parent
-    if stream_dir.name.lower() != 'stream':
-        print(f'Your source file is not in a default bdmv structure!\nWill skip chapters.')
-        return None
-    playlist_dir = Path(os.path.join(stream_dir.parent, "PLAYLIST"))
-    if not playlist_dir.exists():
-        print(f'PLAYLIST folder couldn\'t have been found!\nWill skip chapters.')
-        return None
-
-    chapters: list[Chapter] = []
-    for f in playlist_dir.rglob("*"):
-        if not os.path.isfile(f) or f.suffix.lower() != '.mpls':
-            continue
-        with f.open('rb') as file:
-            header = mpls.load_movie_playlist(file)
-            file.seek(header.playlist_start_address, os.SEEK_SET)
-            playlist = mpls.load_playlist(file)
-            if not playlist.play_items:
-                continue
-
-            file.seek(header.playlist_mark_start_address, os.SEEK_SET)
-            playlist_mark = mpls.load_playlist_mark(file)
-            if (plsmarks := playlist_mark.playlist_marks) is not None:
-                marks = plsmarks
-            else:
-                raise 'There is no playlist marks in this file!'
-
-        for i, playitem in enumerate(playlist.play_items):
-            if playitem.clip_information_filename == src.file.stem and \
-                    playitem.clip_codec_identifier.lower() == src.file.suffix.lower().split('.')[1]:
-                if _print:
-                    print(f'Found chapters for "{src.file.name}" in "{f.name}":')
-                linked_marks = [mark for mark in marks if mark.ref_to_play_item_id == i]
-                try:
-                    assert playitem.intime
-                    offset = min(playitem.intime, linked_marks[0].mark_timestamp)
-                except IndexError:
-                    continue
-                if playitem.stn_table and playitem.stn_table.length != 0 and playitem.stn_table.prim_video_stream_entries \
-                        and (fps_n := playitem.stn_table.prim_video_stream_entries[0][1].framerate):
-                    try:
-                        fps = mpls.FRAMERATE[fps_n]
-                    except:
-                        print('Couldn\'t parse fps from playlist! Will take fps from source clip.')
-                        fps = Fraction(src.src_cut.fps_num, src.src_cut.fps_den)
-
-                    for i, lmark in enumerate(linked_marks, start=1):
-                        time = mpls_timestamp_to_timedelta(lmark.mark_timestamp - offset)
-                        if time > frame_to_timedelta(src.src.num_frames - 1, fps):
-                            continue
-                        chapters.append((time, f'Chapter {i:02.0f}'))
-                    if chapters and _print:
-                        for (time, name) in chapters:
-                            print(f'{name}: {format_timedelta(time)} | {timedelta_to_frame(time, fps)}')
-
-        if chapters:
-            break
-
-    return chapters
-
-
 sb = settings_builder
-SRC_FILE = src_file
