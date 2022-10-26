@@ -185,7 +185,6 @@ def double_waifu2x(clip: vs.VideoNode, cuda: bool | str = 'trt', protect_edges: 
 
     :return:                Doubled clip
     """
-    from havsfunc import Padding
     from vsmlrt import Waifu2x, Backend
 
     backend = Backend.ORT_CUDA(num_streams=num_streams) if cuda == True else \
@@ -194,14 +193,22 @@ def double_waifu2x(clip: vs.VideoNode, cuda: bool | str = 'trt', protect_edges: 
     y = depth(get_y(clip), 32)
     
     if protect_edges:
-        y = Padding(y, 4, 5, 4, 5)
-    
+        if clip.height % 2 != 0:
+            top = left = 4
+            bottom = right = 5
+        else:
+            top = left = 4
+            bottom = right = 4
+        width = clip.width + left + right
+        height = clip.height + top + bottom
+        y = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
+        
     dsrgb = y.std.ShufflePlanes(0, vs.RGB)
     up = Waifu2x(dsrgb, noise=-1, model=6, backend=backend, **w2xargs)
     up = up.std.ShufflePlanes(0, vs.GRAY)
 
     if protect_edges:
-        up = up.std.Crop(8, 10, 8, 10)
+        up = up.std.Crop(left * 2, right * 2, top * 2, bottom * 2)
 
     if fix_tint:
         up = up.std.Expr("x 0.5 255 / +")
