@@ -193,12 +193,7 @@ def double_waifu2x(clip: vs.VideoNode, cuda: bool | str = 'trt', protect_edges: 
     y = depth(get_y(clip), 32)
     
     if protect_edges:
-        if clip.height % 2 != 0:
-            top = left = 4
-            bottom = right = 5
-        else:
-            top = left = 4
-            bottom = right = 4
+        (left, right, top, bottom) = _w2xPadding(y)
         width = clip.width + left + right
         height = clip.height + top + bottom
         y = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
@@ -214,3 +209,19 @@ def double_waifu2x(clip: vs.VideoNode, cuda: bool | str = 'trt', protect_edges: 
         up = up.std.Expr("x 0.5 255 / +")
     
     return depth(up, get_depth(clip))
+
+def _w2xPadding(clip: vs.VideoNode):
+    # w2x needs a padding of atleast 4
+    # it also needs a mod4 res on model 6 so we (hopefully) handle that here
+    from math import floor
+    mod = 4
+    width = clip.width + 8
+    height = clip.height + 8
+    ph = mod - ((width - 1) % mod + 1)
+    pv = mod - ((height - 1) % mod + 1)
+
+    left = floor(ph / 2)
+    right = ph - left
+    top = floor(pv / 2)
+    bottom = pv - top
+    return (left + 4, right + 4, top + 4, bottom + 4)
