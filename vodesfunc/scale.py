@@ -172,7 +172,8 @@ def double_shader(clip: vs.VideoNode, shaderfile: PathLike) -> vs.VideoNode:
     doubled_y = get_y(doubled)
     return depth(doubled_y, get_depth(clip))
 
-def double_waifu2x(clip: vs.VideoNode, cuda: bool | str = 'trt', protect_edges: bool = True, fix_tint: bool = True, num_streams: int = 1, **w2xargs) -> vs.VideoNode:
+def double_waifu2x(clip: vs.VideoNode, cuda: bool | str = 'trt', protect_edges: bool = True, fix_tint: bool = True, 
+        fp16: bool = True, num_streams: int = 1, **w2xargs) -> vs.VideoNode:
     """
     Simple utility function for doubling a clip using Waifu2x
 
@@ -180,6 +181,7 @@ def double_waifu2x(clip: vs.VideoNode, cuda: bool | str = 'trt', protect_edges: 
     :param cuda:            ORT-Cuda if True, NCNN-VK if False, TRT if some string
     :param protect_edges:   Pads pre doubling and crops after to avoid waifu2x damaging edges
     :param fix_tint:        Fix the tint of this waifu2x model
+    :param fp16:            Uses 16 bit floating point internally if True
     :param num_streams:     Amount of streams to use for Waifu2x; Sacrifices a lot of vram for a speedup
     :param w2xargs:         Args that get passed to Waifu2x
 
@@ -187,8 +189,8 @@ def double_waifu2x(clip: vs.VideoNode, cuda: bool | str = 'trt', protect_edges: 
     """
     from vsmlrt import Waifu2x, Backend
 
-    backend = Backend.ORT_CUDA(num_streams=num_streams) if cuda == True else \
-        Backend.NCNN_VK(num_streams=num_streams) if cuda == False else Backend.TRT(num_streams=num_streams)
+    backend = Backend.ORT_CUDA(num_streams=num_streams, fp16=fp16) if cuda == True else \
+        Backend.NCNN_VK(num_streams=num_streams, fp16=fp16) if cuda == False else Backend.TRT(num_streams=num_streams, fp16=fp16)
     
     y = depth(get_y(clip), 32)
     
