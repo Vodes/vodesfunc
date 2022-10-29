@@ -4,27 +4,140 @@ import vapoursynth as vs
 from vskernels import Catrom, Kernel
 from vstools import depth, get_depth, get_y, iterate, ColorRange
 from .types import PathLike
+from abc import ABC, abstractmethod
 
 core = vs.core
 
 
 __all__: list[str] = [
     'nnedi_double',
-    'double_nnedi',
-    'double_waifu2x',
-    'double_shader',
+    'double_nnedi', 'NNEDI_Doubler',
+    'double_waifu2x', 'Waifu2x_Doubler',
+    'double_shader', 'Shader_Doubler',
     'vodes_rescale',
 ]
 
+class Doubler(ABC):
+    
+    kwargs: dict[str, Any]
+    """Arguments passed to the internal scale function"""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.kwargs = kwargs
+
+    @abstractmethod
+    def double(self, clip: vs.VideoNode) -> vs.VideoNode:
+        """
+            Returns doubled clip
+        """
+        pass
+
+class NNEDI_Doubler(Doubler):
+    ediargs: dict[str, Any]
+    opencl: bool 
+
+    def __init__(self, opencl: bool = True, nns: int = 4, nsize: int = 4, qual: int = 2, pscrn: int = 1) -> None:
+        """
+            Simple utility class for doubling a clip using znedi or nnedi3cl (also fixes the shift)
+
+            :param opencl:          Will use nnedi3cl if True and znedi3 if False
+        """
+        self.ediargs = {"qual": qual, "nsize": nsize, "nns": nns, "pscrn": pscrn}
+        self.opencl = opencl
+
+    def double(self, clip: vs.VideoNode, correct_shift: bool = True) -> vs.VideoNode:
+        y = get_y(clip)
+        dep = get_depth(y)
+
+        if self.opencl:
+            doubled_y = y.nnedi3cl.NNEDI3CL(dh=True, field=0, **self.ediargs).std.Transpose() \
+                .nnedi3cl.NNEDI3CL(dh=True, field=0, **self.ediargs).std.Transpose()
+        else:
+            doubled_y = depth(y, 16).znedi3.nnedi3(dh=True, field=0, **self.ediargs).std.Transpose() \
+                .znedi3.nnedi3(dh=True, field=0, **self.ediargs).std.Transpose()
+            doubled_y = depth(doubled_y, dep)
+        
+        if correct_shift:
+            doubled_y = doubled_y.resize.Bicubic(src_top=.5, src_left=.5)
+        return doubled_y
+
+class Shader_Doubler(Doubler):
+    shaderfile: str 
+
+    def __init__(self, shaderfile: PathLike) -> None:
+        """
+            Simple utility class for doubling a clip using a glsl shader
+
+            :param shaderfile:      The glsl shader used to double the resolution
+        """
+        self.shaderfile = shaderfile if isinstance(shaderfile, str) else str(shaderfile.resolve())
+
+    def double(self, clip: vs.VideoNode) -> vs.VideoNode:
+        y = depth(get_y(clip), 16)
+        filler_chroma = core.std.BlankClip(y, format=vs.YUV444P16)
+        doubled = core.std.ShufflePlanes([y, filler_chroma], [0, 1, 2], vs.YUV) \
+            .placebo.Shader(self.shaderfile, filter='box', width=y.width*2, height=y.height*2)
+        doubled_y = get_y(doubled)
+        return depth(doubled_y, get_depth(clip))
+
+class Waifu2x_Doubler(Doubler):
+    from vsmlrt import Backend
+    backend: Backend
+    kwargs: dict[str, Any]
+
+    def __init__(self, cuda: bool | str = 'trt', fp16: bool = True, num_streams: int = 1, **kwargs) -> None:
+        """
+            Simple utility class for doubling a clip using Waifu2x
+
+            :param cuda:            ORT-Cuda if True, NCNN-VK if False, TRT if some string
+            :param fp16:            Uses 16 bit floating point internally if True
+            :param num_streams:     Amount of streams to use for Waifu2x; Sacrifices a lot of vram for a speedup
+            :param w2xargs:         Args that get passed to Waifu2x
+        """
+        from vsmlrt import Backend
+        self.backend = Backend.ORT_CUDA(num_streams=num_streams, fp16=fp16) if cuda == True else \
+            Backend.NCNN_VK(num_streams=num_streams, fp16=fp16) if cuda == False else Backend.TRT(num_streams=num_streams, fp16=fp16)
+        self.kwargs = kwargs
+
+    def _pad(self, clip: vs.VideoNode):
+        # w2x needs a padding of atleast 4
+        # it also needs a mod4 res on model 6 so we (hopefully) handle that here
+        from math import floor
+        mod = 4
+        width = clip.width + 8
+        height = clip.height + 8
+        ph = mod - ((width - 1) % mod + 1)
+        pv = mod - ((height - 1) % mod + 1)
+
+        left = floor(ph / 2)
+        right = ph - left
+        top = floor(pv / 2)
+        bottom = pv - top
+        return (left + 4, right + 4, top + 4, bottom + 4)
+
+    def double(self, clip: vs.VideoNode) -> vs.VideoNode:
+        from vsmlrt import Waifu2x
+        y = depth(get_y(clip), 32)
+    
+        (left, right, top, bottom) = self._pad(y)
+        width = clip.width + left + right
+        height = clip.height + top + bottom
+        y = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
+        
+        dsrgb = y.std.ShufflePlanes(0, vs.RGB)
+        up = Waifu2x(dsrgb, noise=-1, model=6, backend=self.backend, **self.kwargs)
+        up = up.std.ShufflePlanes(0, vs.GRAY)
+        up = up.std.Crop(left * 2, right * 2, top * 2, bottom * 2)
+        up = up.std.Expr("x 0.5 255 / +")
+        return depth(up, get_depth(clip))
 
 def vodes_rescale(
     src: vs.VideoNode, height: float = 0, width: float = None,
-    mode: int = 0, descale_kernel: Kernel | list[vs.VideoNode] = Catrom(),
-    downscaler: Kernel | str = Catrom(), opencl: bool = True,
-    modeargs: dict[str, Any] = {"radius": 2, "strength": 50},
-    ediargs: dict[str, Any] = {"qual": 2, "nsize": 4, "nns": 4, "pscrn": 1},
+    descale_kernel: Kernel | list[vs.VideoNode] = Catrom(),
+    doubler: Kernel | Callable[[vs.VideoNode], vs.VideoNode] | Doubler = NNEDI_Doubler(),
+    downscaler: Kernel | str = Catrom(),
     line_mask: vs.VideoNode | bool = None, credit_mask: vs.VideoNode = None, mask_threshold: float = 0.04,
-    do_post_double: Callable[[vs.VideoNode], vs.VideoNode] = None, shaderfile: str = r'C:\FSRCNNX_x2_56-16-4-1.glsl'
+    do_post_double: Callable[[vs.VideoNode], vs.VideoNode] = None
 ) -> list[vs.VideoNode | None]:
     """
     Rescale function with masking for convenience etc.
@@ -60,30 +173,12 @@ def vodes_rescale(
     ref_y = descale_kernel.scale(descaled_y, src.width, src.height) if isinstance(
         descale_kernel, Kernel) else descale_kernel[1]
 
-    if mode == 0:
-        doubled_y = double_nnedi(descaled_y, opencl, True, ediargs)
-    elif mode == 1:
-        try:
-            import vardefunc as vdf
-            doubled_y = vdf.fsrcnnx_upscale(descaled_y, height=descaled_y.height * 2, downscaler=None, profile='zastin', shader_file=shaderfile,
-                                            sharpener=lambda clip: vdf.sharp.z4usm(clip, modeargs.get("radius", 2), modeargs.get("strength", 50)))
-        except:
-            trash = core.std.BlankClip(descaled_y, format=clip.format)
-            doubled = core.std.ShufflePlanes([descaled_y, trash], [0, 1, 2], vs.YUV) \
-                .placebo.Shader(shader=shaderfile, filter='box', width=descaled_y.width*2, height=descaled_y.height*2)
-            doubled_y = get_y(doubled)
-    elif mode == 2:
-        import vardefunc as vdf
-        nnedi = double_nnedi(descaled_y, opencl, True, ediargs)
-        fsrcnnx = vdf.fsrcnnx_upscale(descaled_y, height=descaled_y.height * 2, downscaler=None, profile='zastin', shader_file=shaderfile,
-                                      upscaled_smooth=nnedi,
-                                      sharpener=lambda clip: vdf.sharp.z4usm(clip, modeargs.get("radius", 2), modeargs.get("strength", 35)))
-
-        if "ratio" in modeargs:
-            doubled_y = core.std.Expr(
-                [nnedi, fsrcnnx], f"{modeargs.get('ratio')} x * {1 - modeargs.get('ratio')} y * +")
-        else:
-            doubled_y = fsrcnnx
+    if isinstance(doubler, Doubler):
+        doubled_y = doubler.double(descaled_y)
+    elif isinstance(doubler, Kernel):
+        doubled_y = doubler.scale(descaled_y, descaled_y.width * 2, descaled_y.height * 2)
+    else: 
+        doubled_y = doubler(descaled_y)
 
     if do_post_double is not None:
         doubled_y = do_post_double(doubled_y)
@@ -125,105 +220,15 @@ def vodes_rescale(
             credit_mask if isinstance(credit_mask, vs.VideoNode) else blank_mask,
             line_mask if isinstance(line_mask, vs.VideoNode) else blank_mask]
 
-
 def double_nnedi(clip: vs.VideoNode, opencl: bool = True, correct_shift: bool = True,
                  ediargs: dict[str, Any] = {"qual": 2, "nsize": 4, "nns": 4, "pscrn": 1}) -> vs.VideoNode:
-    """
-    Simple utility function for doubling a clip using znedi or nnedi3cl (also fixes the shift)
-
-    :param clip:            Input clip
-    :param opencl:          Will use nnedi3cl if True and znedi3 if False
-    :param ediargs:         Other params you may want to pass to the doubler (with sane defaults)
-
-    :return:                Doubled clip
-    """
-    y = get_y(clip)
-    dep = get_depth(y)
-
-    if opencl:
-        doubled_y = y.nnedi3cl.NNEDI3CL(dh=True, field=0, **ediargs).std.Transpose() \
-            .nnedi3cl.NNEDI3CL(dh=True, field=0, **ediargs).std.Transpose()
-    else:
-        doubled_y = depth(y, 16).znedi3.nnedi3(dh=True, field=0, **ediargs).std.Transpose() \
-            .znedi3.nnedi3(dh=True, field=0, **ediargs).std.Transpose()
-        doubled_y = depth(doubled_y, dep)
-    
-    if correct_shift:
-        doubled_y = doubled_y.resize.Bicubic(src_top=.5, src_left=.5)
-    return doubled_y
+    return NNEDI_Doubler(opencl, **ediargs).double(clip, correct_shift)
 
 nnedi_double = double_nnedi
 
 def double_shader(clip: vs.VideoNode, shaderfile: PathLike) -> vs.VideoNode:
-    """
-    Simple utility function for doubling a clip using a glsl shader
-
-    :param clip:            Input clip
-    :param shaderfile:      The glsl shader used to double the resolution
-
-    :return:                Doubled clip
-    """
-    shader = shaderfile if isinstance(shaderfile, str) else str(shaderfile.resolve())
-
-    y = depth(get_y(clip), 16)
-    filler_chroma = core.std.BlankClip(y, format=vs.YUV444P16)
-    doubled = core.std.ShufflePlanes([y, filler_chroma], [0, 1, 2], vs.YUV) \
-        .placebo.Shader(shader, filter='box', width=y.width*2, height=y.height*2)
-    doubled_y = get_y(doubled)
-    return depth(doubled_y, get_depth(clip))
+    return Shader_Doubler(shaderfile).double(clip)
 
 def double_waifu2x(clip: vs.VideoNode, cuda: bool | str = 'trt', protect_edges: bool = True, fix_tint: bool = True, 
         fp16: bool = True, num_streams: int = 1, **w2xargs) -> vs.VideoNode:
-    """
-    Simple utility function for doubling a clip using Waifu2x
-
-    :param clip:            Input clip
-    :param cuda:            ORT-Cuda if True, NCNN-VK if False, TRT if some string
-    :param protect_edges:   Pads pre doubling and crops after to avoid waifu2x damaging edges
-    :param fix_tint:        Fix the tint of this waifu2x model
-    :param fp16:            Uses 16 bit floating point internally if True
-    :param num_streams:     Amount of streams to use for Waifu2x; Sacrifices a lot of vram for a speedup
-    :param w2xargs:         Args that get passed to Waifu2x
-
-    :return:                Doubled clip
-    """
-    from vsmlrt import Waifu2x, Backend
-
-    backend = Backend.ORT_CUDA(num_streams=num_streams, fp16=fp16) if cuda == True else \
-        Backend.NCNN_VK(num_streams=num_streams, fp16=fp16) if cuda == False else Backend.TRT(num_streams=num_streams, fp16=fp16)
-    
-    y = depth(get_y(clip), 32)
-    
-    if protect_edges:
-        (left, right, top, bottom) = _w2xPadding(y)
-        width = clip.width + left + right
-        height = clip.height + top + bottom
-        y = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
-        
-    dsrgb = y.std.ShufflePlanes(0, vs.RGB)
-    up = Waifu2x(dsrgb, noise=-1, model=6, backend=backend, **w2xargs)
-    up = up.std.ShufflePlanes(0, vs.GRAY)
-
-    if protect_edges:
-        up = up.std.Crop(left * 2, right * 2, top * 2, bottom * 2)
-
-    if fix_tint:
-        up = up.std.Expr("x 0.5 255 / +")
-    
-    return depth(up, get_depth(clip))
-
-def _w2xPadding(clip: vs.VideoNode):
-    # w2x needs a padding of atleast 4
-    # it also needs a mod4 res on model 6 so we (hopefully) handle that here
-    from math import floor
-    mod = 4
-    width = clip.width + 8
-    height = clip.height + 8
-    ph = mod - ((width - 1) % mod + 1)
-    pv = mod - ((height - 1) % mod + 1)
-
-    left = floor(ph / 2)
-    right = ph - left
-    top = floor(pv / 2)
-    bottom = pv - top
-    return (left + 4, right + 4, top + 4, bottom + 4)
+    return Waifu2x_Doubler(cuda, fp16, num_streams, w2xargs).double(clip)
