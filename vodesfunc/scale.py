@@ -49,10 +49,15 @@ class NNEDI_Doubler(Doubler):
     def double(self, clip: vs.VideoNode, correct_shift: bool = True) -> vs.VideoNode:
         y = get_y(clip)
 
-        # Now uses field 1 because 0 caused issues on edges (https://slow.pics/c/QcJef38u)
+        # nnedi3cl needs padding, to avoid issues on edges (https://slow.pics/c/QcJef38u)
         if self.opencl:
+            (left, right, top, bottom) = mod_padding(y, 2, 2)
+            width = clip.width + left + right
+            height = clip.height + top + bottom
+            y = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
             doubled_y = y.nnedi3cl.NNEDI3CL(dh=True, field=1, **self.ediargs).std.Transpose() \
                 .nnedi3cl.NNEDI3CL(dh=True, field=1, **self.ediargs).std.Transpose()
+            doubled_y = doubled_y.std.Crop(left * 2, right * 2, top * 2, bottom * 2)
         else:
             doubled_y = depth(y, 16).znedi3.nnedi3(dh=True, field=1, **self.ediargs).std.Transpose() \
                 .znedi3.nnedi3(dh=True, field=1, **self.ediargs).std.Transpose()
@@ -101,27 +106,11 @@ class Waifu2x_Doubler(Doubler):
             Backend.NCNN_VK(num_streams=num_streams, fp16=fp16) if cuda == False else Backend.TRT(num_streams=num_streams, fp16=fp16)
         self.kwargs = kwargs
 
-    def _pad(self, clip: vs.VideoNode):
-        # w2x needs a padding of atleast 4
-        # it also needs a mod4 res on model 6 so we (hopefully) handle that here
-        from math import floor
-        mod = 4
-        width = clip.width + 8
-        height = clip.height + 8
-        ph = mod - ((width - 1) % mod + 1)
-        pv = mod - ((height - 1) % mod + 1)
-
-        left = floor(ph / 2)
-        right = ph - left
-        top = floor(pv / 2)
-        bottom = pv - top
-        return (left + 4, right + 4, top + 4, bottom + 4)
-
     def double(self, clip: vs.VideoNode) -> vs.VideoNode:
         from vsmlrt import Waifu2x
         y = depth(get_y(clip), 32)
     
-        (left, right, top, bottom) = self._pad(y)
+        (left, right, top, bottom) = mod_padding(y)
         width = clip.width + left + right
         height = clip.height + top + bottom
         y = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
@@ -299,3 +288,16 @@ def double_shader(clip: vs.VideoNode, shaderfile: PathLike) -> vs.VideoNode:
 def double_waifu2x(clip: vs.VideoNode, cuda: bool | str = 'trt', protect_edges: bool = True, fix_tint: bool = True, 
         fp16: bool = True, num_streams: int = 1, **w2xargs) -> vs.VideoNode:
     return Waifu2x_Doubler(cuda, fp16, num_streams, w2xargs).double(clip)
+
+def mod_padding(clip: vs.VideoNode, mod: int = 4, min: int = 4):
+    from math import floor
+    width = clip.width + min * 2
+    height = clip.height + min * 2
+    ph = mod - ((width - 1) % mod + 1)
+    pv = mod - ((height - 1) % mod + 1)
+
+    left = floor(ph / 2)
+    right = ph - left
+    top = floor(pv / 2)
+    bottom = pv - top
+    return (left + min, right + min, top + min, bottom + min)
