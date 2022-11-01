@@ -55,16 +55,16 @@ class NNEDI_Doubler(Doubler):
             width = clip.width + left + right
             height = clip.height + top + bottom
             y = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
-            doubled_y = y.nnedi3cl.NNEDI3CL(dh=True, field=1, **self.ediargs).std.Transpose() \
-                .nnedi3cl.NNEDI3CL(dh=True, field=1, **self.ediargs).std.Transpose()
+            doubled_y = y.nnedi3cl.NNEDI3CL(dh=True, field=0, **self.ediargs).std.Transpose() \
+                .nnedi3cl.NNEDI3CL(dh=True, field=0, **self.ediargs).std.Transpose()
             doubled_y = doubled_y.std.Crop(left * 2, right * 2, top * 2, bottom * 2)
         else:
-            doubled_y = depth(y, 16).znedi3.nnedi3(dh=True, field=1, **self.ediargs).std.Transpose() \
-                .znedi3.nnedi3(dh=True, field=1, **self.ediargs).std.Transpose()
+            doubled_y = depth(y, 16).znedi3.nnedi3(dh=True, field=0, **self.ediargs).std.Transpose() \
+                .znedi3.nnedi3(dh=True, field=0, **self.ediargs).std.Transpose()
             doubled_y = depth(doubled_y, get_depth(clip))
         
         if correct_shift:
-            doubled_y = doubled_y.resize.Bicubic(src_top=-.5, src_left=-.5)
+            doubled_y = doubled_y.resize.Bicubic(src_top=.5, src_left=.5)
 
         return doubled_y
 
