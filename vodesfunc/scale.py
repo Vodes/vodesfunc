@@ -124,11 +124,11 @@ class Waifu2x_Doubler(Doubler):
  
 class Clamped_Doubler(Doubler):
 
-    shaderfile: str
+    sharp_doubler: Doubler
     sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode] = None
 
     def __init__(self, sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode] = True, 
-            shaderfile: PathLike = r'C:\FSRCNNX_x2_56-16-4-1.glsl', ratio: int = 100, **kwargs) -> None:
+            sharp_doubler: Doubler | str = Shader_Doubler(), ratio: int = 100, **kwargs) -> None:
         """
             Simple utility class for doubling a clip using fsrcnnx / any shader clamped to nnedi.
             Using sharpen will be basically the same as the zastin profile in varde's fsrcnnx upscale.
@@ -136,7 +136,7 @@ class Clamped_Doubler(Doubler):
 
             :param sharpen_smooth:  Sharpened "smooth upscale" clip or a sharpener function. Will use z4usm if True.
                                     Uses the other mode if False or None.
-            :param shaderfile:      The glsl shader used to double the resolution
+            :param sharp_doubler:   The doubler used for the sharp upscale. Defaults to Shader_Doubler (which defaults to fsrcnnx)
             :param ratio:           Does a weighted average of the clamped and nnedi clips. 
                                     The higher, the more of the clamped clip will be used.
             :param kwargs:          You can pass all kinds of stuff here, ranging from the default sharpener params to nnedi args.
@@ -144,7 +144,7 @@ class Clamped_Doubler(Doubler):
                                     nnedi params: see `NNEDI_Doubler`
                                     overshoot, undershoot for non-sharpen mode (defaults to ratio / 100)
         """
-        self.shaderfile = shaderfile if isinstance(shaderfile, str) else str(shaderfile.resolve())
+        self.sharp_doubler = Shader_Doubler(sharp_doubler) if isinstance(sharp_doubler, str) else sharp_doubler
         self.sharpen_smooth = sharpen_smooth
 
         if ratio > 100 or ratio < 1:
@@ -161,7 +161,7 @@ class Clamped_Doubler(Doubler):
         strength = self.kwargs.pop("strength", 35)
 
         smooth = NNEDI_Doubler(**self.kwargs).double(y)
-        shader = Shader_Doubler(self.shaderfile).double(y)
+        shader = self.sharp_doubler.double(y)
 
         if self.sharpen_smooth != None and self.sharpen_smooth != False:
             if isinstance(self.sharpen_smooth, vs.VideoNode):
