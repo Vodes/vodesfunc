@@ -203,12 +203,12 @@ class Clamped_Doubler(Doubler):
         return depth(clamped, get_depth(clip))
 
 def vodes_rescale(
-    src: vs.VideoNode, height: float = 0, width: float = None,
+    src: vs.VideoNode, height: float = 0,
     descale_kernel: Kernel | list[vs.VideoNode] = Catrom(),
     doubler: Kernel | Callable[[vs.VideoNode], vs.VideoNode] | Doubler = NNEDI_Doubler(),
     downscaler: Kernel | str = Catrom(),
     line_mask: vs.VideoNode | bool = None, credit_mask: vs.VideoNode = None, mask_threshold: float = 0.04,
-    do_post_double: Callable[[vs.VideoNode], vs.VideoNode] = None
+    width: float = None, do_post_double: Callable[[vs.VideoNode], vs.VideoNode] = None
 ) -> list[vs.VideoNode | None]:
     """
     Rescale function with masking for convenience etc.
