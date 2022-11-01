@@ -13,7 +13,7 @@ __all__: list[str] = [
     'nnedi_double',
     'double_nnedi', 'NNEDI_Doubler',
     'double_waifu2x', 'Waifu2x_Doubler',
-    'double_shader', 'Shader_Doubler',
+    'double_shader', 'Shader_Doubler', 'Clamped_Doubler',
     'vodes_rescale',
 ]
 
@@ -36,35 +36,37 @@ class NNEDI_Doubler(Doubler):
     ediargs: dict[str, Any]
     opencl: bool 
 
-    def __init__(self, opencl: bool = True, nns: int = 4, nsize: int = 4, qual: int = 2, pscrn: int = 1) -> None:
+    def __init__(self, opencl: bool = True, nns: int = 4, nsize: int = 4, qual: int = 2, pscrn: int = 1, **kwargs) -> None:
         """
             Simple utility class for doubling a clip using znedi or nnedi3cl (also fixes the shift)
 
             :param opencl:          Will use nnedi3cl if True and znedi3 if False
         """
         self.ediargs = {"qual": qual, "nsize": nsize, "nns": nns, "pscrn": pscrn}
+        self.ediargs.update(**kwargs)
         self.opencl = opencl
 
     def double(self, clip: vs.VideoNode, correct_shift: bool = True) -> vs.VideoNode:
         y = get_y(clip)
-        dep = get_depth(y)
 
+        # Now uses field 1 because 0 caused issues on edges (https://slow.pics/c/QcJef38u)
         if self.opencl:
-            doubled_y = y.nnedi3cl.NNEDI3CL(dh=True, field=0, **self.ediargs).std.Transpose() \
-                .nnedi3cl.NNEDI3CL(dh=True, field=0, **self.ediargs).std.Transpose()
+            doubled_y = y.nnedi3cl.NNEDI3CL(dh=True, field=1, **self.ediargs).std.Transpose() \
+                .nnedi3cl.NNEDI3CL(dh=True, field=1, **self.ediargs).std.Transpose()
         else:
-            doubled_y = depth(y, 16).znedi3.nnedi3(dh=True, field=0, **self.ediargs).std.Transpose() \
-                .znedi3.nnedi3(dh=True, field=0, **self.ediargs).std.Transpose()
-            doubled_y = depth(doubled_y, dep)
+            doubled_y = depth(y, 16).znedi3.nnedi3(dh=True, field=1, **self.ediargs).std.Transpose() \
+                .znedi3.nnedi3(dh=True, field=1, **self.ediargs).std.Transpose()
+            doubled_y = depth(doubled_y, get_depth(clip))
         
         if correct_shift:
-            doubled_y = doubled_y.resize.Bicubic(src_top=.5, src_left=.5)
+            doubled_y = doubled_y.resize.Bicubic(src_top=-.5, src_left=-.5)
+
         return doubled_y
 
 class Shader_Doubler(Doubler):
     shaderfile: str 
 
-    def __init__(self, shaderfile: PathLike) -> None:
+    def __init__(self, shaderfile: PathLike = r'C:\FSRCNNX_x2_56-16-4-1.glsl') -> None:
         """
             Simple utility class for doubling a clip using a glsl shader
 
@@ -130,6 +132,75 @@ class Waifu2x_Doubler(Doubler):
         up = up.std.Crop(left * 2, right * 2, top * 2, bottom * 2)
         up = up.std.Expr("x 0.5 255 / +")
         return depth(up, get_depth(clip))
+ 
+class Clamped_Doubler(Doubler):
+
+    shaderfile: str
+    sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode] = None
+
+    def __init__(self, sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode] = True, 
+            shaderfile: PathLike = r'C:\FSRCNNX_x2_56-16-4-1.glsl', ratio: int = 100, **kwargs) -> None:
+        """
+            Simple utility class for doubling a clip using fsrcnnx / any shader clamped to nnedi.
+            Using sharpen will be basically the same as the zastin profile in varde's fsrcnnx upscale.
+            Not sharpening will on the other hand be the same as the slow profile.
+
+            :param sharpen_smooth:  Sharpened "smooth upscale" clip or a sharpener function. Will use z4usm if True.
+                                    Uses the other mode if False or None.
+            :param shaderfile:      The glsl shader used to double the resolution
+            :param ratio:           Does a weighted average of the clamped and nnedi clips. 
+                                    The higher, the more of the clamped clip will be used.
+            :param kwargs:          You can pass all kinds of stuff here, ranging from the default sharpener params to nnedi args.
+                                    z4usm params: radius (default 2), strength (default 35)
+                                    nnedi params: see `NNEDI_Doubler`
+                                    overshoot, undershoot for non-sharpen mode (defaults to ratio / 100)
+        """
+        self.shaderfile = shaderfile if isinstance(shaderfile, str) else str(shaderfile.resolve())
+        self.sharpen_smooth = sharpen_smooth
+
+        if ratio > 100 or ratio < 1:
+            raise "Clamped_Doubler: ratio should be a value between 1 and 100"
+        self.ratio = ratio
+        self.kwargs = kwargs
+
+    def double(self, clip: vs.VideoNode) -> vs.VideoNode:
+        y = depth(get_y(clip), 16)
+
+        overshoot = self.kwargs.pop("overshoot", self.ratio / 100)
+        undershoot = self.kwargs.pop("undershoot", overshoot)
+        radius = self.kwargs.pop("radius", 2)
+        strength = self.kwargs.pop("strength", 35)
+
+        smooth = NNEDI_Doubler(**self.kwargs).double(y)
+        shader = Shader_Doubler(self.shaderfile).double(y)
+
+        if self.sharpen_smooth != None and self.sharpen_smooth != False:
+            if isinstance(self.sharpen_smooth, vs.VideoNode):
+                sharpened_smooth = self.sharpen_smooth
+            elif isinstance(self.sharpen_smooth, Callable):
+                sharpened_smooth = self.sharpen_smooth(smooth)
+            elif self.sharpen_smooth == True:
+                try:
+                    import vardefunc as vdf
+                    sharpened_smooth = vdf.sharp.z4usm(smooth, radius, strength)
+                except:
+                    raise "Clamped_Doubler: Couldn't import vardefunc. Please use a different sharpener or none at all."
+            
+            clamped = core.std.Expr([smooth, shader, sharpened_smooth], 'x y z min max y z max min')
+            if self.ratio != 100:
+                clamped = core.std.Expr(
+                    [clamped, smooth], f"{self.ratio / 100} x * {1 - (self.ratio / 100)} y * +")
+        else:
+            upscaled = core.std.Expr([shader, smooth], 'x {ratio} * y 1 {ratio} - * +'.format(ratio=self.ratio / 100))
+            dark_limit = core.std.Minimum(smooth)
+            bright_limit = core.std.Maximum(smooth)
+            overshoot *= 2**8
+            undershoot *= 2**8
+            clamped = core.std.Expr(
+                    [upscaled, bright_limit, dark_limit],
+                    f'x y {overshoot} + > y {overshoot} + x ? z {undershoot} - < z {undershoot} - x y {overshoot} + > y {overshoot} + x ? ?'
+            )
+        return depth(clamped, get_depth(clip))
 
 def vodes_rescale(
     src: vs.VideoNode, height: float = 0, width: float = None,
@@ -145,17 +216,13 @@ def vodes_rescale(
     :param src:             Input clip
     :param height:          Height to be descaled to
     :param width:           Width to be descaled to; will be calculated if you don't pass any
+    :param doubler:         A callable or kernel or Doubler class that will be used to upscale
     :param descale_kernel:  Kernel used for descaling, supports passing a list of descaled and ref clip instead
     :param downscaler:      Kernel used to downscale the doubled clip, uses vsscale.ssim_downsample if passed 'ssim'
-    :param opencl:          Will use nnedi3cl if True and znedi3 if not
-    :param mode:            0 (default) = nnedi doubling, 1 = fsrcnnx doubling (vardefunc zastin if available), 2 = wtf
-    :param modeargs:        Dict mode related params (Mode 1 supports 'radius' and 'strength' for the sharpening and Mode 2 adds 'ratio' support)
-    :param ediargs:         Other params you may want to pass to the doubler (with sane defaults)
     :param line_mask:       Linemask to only rescale lineart | Will generate one if None or skip masking if `False` is passed
     :param credit_mask:     Credit Masking | Will generate one if None or skip masking if *mask_threshold* is <= 0
     :param mask_threshold:  Threshold for the diff based credit mask | lower catches more
     :param do_post_double:  Pass your own function as a lambda if you want to manipulate the clip before the downscale happens
-    :param shaderfile:      Pass your FSRCNNX Shaderfile (my path as default lol)
     :return:                List of rescaled, reference upscale, credit mask and line mask
     """
     wdepth = 16 if get_depth(src) < 16 else get_depth(src)
@@ -221,7 +288,7 @@ def vodes_rescale(
             line_mask if isinstance(line_mask, vs.VideoNode) else blank_mask]
 
 def double_nnedi(clip: vs.VideoNode, opencl: bool = True, correct_shift: bool = True,
-                 ediargs: dict[str, Any] = {"qual": 2, "nsize": 4, "nns": 4, "pscrn": 1}) -> vs.VideoNode:
+                ediargs: dict[str, Any] = {"qual": 2, "nsize": 4, "nns": 4, "pscrn": 1}) -> vs.VideoNode:
     return NNEDI_Doubler(opencl, **ediargs).double(clip, correct_shift)
 
 nnedi_double = double_nnedi
