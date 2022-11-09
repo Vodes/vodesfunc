@@ -9,7 +9,7 @@ __all__ = [
 ]
 
 def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5], size: float | list[float] = 3, 
-    type: int = 3, static: bool = False, temporal_average: int = 25, luma_scaling = 6, seed: int = -1,
+    type: int = 3, static: bool = False, temporal_average: int = 25, luma_scaling = 6, seed: int = -1, temporal_radius: int = 3,
     fade_edges: bool = True, tv_range: bool = True, lo: int | Sequence[int] | None = None, hi: int | Sequence[int] | None = None,
     protect_neutral: bool = True, **kwargs) -> vs.VideoNode:
 
@@ -32,7 +32,8 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
         :param hi:                  Overwrite legal range's maximums. Value is scaled from 8-bit to clip depth.
         :param protect_neutral:     Disable chroma grain on neutral chroma.
         :param seed:                Grain seed for the grainer.
-        :param temporal_average:    Reference frame radius for temporal softening and grain consistency.
+        :param temporal_average:    Reference frame weighting for temporal softening and grain consistency.
+        :param temporal_radius:     How many frames the averaging will use.
         :param kwargs:              Kwargs passed to the grainer.
         
         :returns: Grained clip.
@@ -48,19 +49,30 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
         return scale_value(value, 8, ogdepth, scale_offsets=not tv_range, chroma=chroma)
 
     neutral = [get_neutral_value(clip), get_neutral_value(clip, True)]
+
+    if not static and temporal_average > 0:
+        length = clip.num_frames + temporal_radius - 1
+    else:
+        length = clip.num_frames
+
     if type == 4:
         from vskernels import BicubicDidee
-        blank = clip.std.BlankClip(clip.width * 1.3, clip.height * 1.3, color=normalize_seq(neutral, clip.format.num_planes))
+        blank = clip.std.BlankClip(clip.width * 1.3, clip.height * 1.3, length=length, color=normalize_seq(neutral, clip.format.num_planes))
         grained = blank.noise.Add(strength[0], strength[1], type=2, xsize=size[0] * 0.9, ysize=size[1] * 0.9, seed=seed, constant=static, **kwargs)
         grained = BicubicDidee().scale(grained, clip.width, clip.height)
     elif type > 4 or type < 0:
         raise ValueError('adaptive_grain: Type has to be a number between 0 and 4')
     else: 
-        blank = clip.std.BlankClip(clip.width, clip.height, color=normalize_seq(neutral, clip.format.num_planes))
+        blank = clip.std.BlankClip(clip.width, clip.height, length=length, color=normalize_seq(neutral, clip.format.num_planes))
         grained = blank.noise.Add(strength[0], strength[1], type=type, xsize=size[0], ysize=size[1], seed=seed, constant=static, **kwargs)
 
     if not static and temporal_average > 0:
         grained = core.std.Merge(grained, core.std.AverageFrames(grained, weights=[1] * 3), weight=temporal_average / 100)
+    
+    if not static and temporal_average > 0:
+        cut = (temporal_radius - 1) // 2
+        grained = core.std.Merge(grained, core.std.AverageFrames(grained, weights=[1] * temporal_radius), weight=temporal_average / 100)
+        grained = grained[cut:-cut]
 
     if fade_edges:
         if lo is None:
