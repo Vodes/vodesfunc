@@ -65,9 +65,6 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
     else: 
         blank = clip.std.BlankClip(clip.width, clip.height, length=length, color=normalize_seq(neutral, clip.format.num_planes))
         grained = blank.noise.Add(strength[0], strength[1], type=type, xsize=size[0], ysize=size[1], seed=seed, constant=static, **kwargs)
-
-    if not static and temporal_average > 0:
-        grained = core.std.Merge(grained, core.std.AverageFrames(grained, weights=[1] * 3), weight=temporal_average / 100)
     
     if not static and temporal_average > 0:
         cut = (temporal_radius - 1) // 2
