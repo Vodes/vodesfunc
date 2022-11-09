@@ -470,6 +470,7 @@ class Chapters():
         """
         for (time, name) in self.chapters:
             print(f'{name}: {format_timedelta(time)} | {timedelta_to_frame(time, self.fps)}')
+        print("", end='\n')
         return self
 
     def to_file(self, out: PathLike = Path(os.getcwd())) -> str:
