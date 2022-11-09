@@ -242,7 +242,7 @@ def vodes_rescale(
     if isinstance(downscaler, str) and downscaler.lower() == 'ssim':
         import vsscale as vss
         rescaled_y = vss.ssim_downsample(depth(doubled_y, 16), src.width, src.height)
-        rescaled_y = depth(doubled_y, wdepth)
+        rescaled_y = depth(rescaled_y, wdepth)
     else:
         rescaled_y = downscaler.scale(doubled_y, src.width, src.height)
 
