@@ -167,6 +167,8 @@ class Setup:
                 elif isinstance(clip, src_file):
                     clip = clip.src
                     fps = Fraction(clip.fps_num, clip.fps_den)
+                else:
+                    fps = Fraction(clip.fps_num, clip.fps_den)
 
         if isinstance(file, src_file):
             trim = file.trim
