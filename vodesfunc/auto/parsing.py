@@ -26,7 +26,7 @@ def parse_xml(file: Path) -> list[Chapter]:
 
 def _parse_chapters(file: Path, reg: str, flags: int = 0) -> list[Chapter]:
     chapters: list[Chapter] = []
-    with file.open('r') as f:
+    with file.open('r', encoding='utf-8') as f:
         for match in re.finditer(re.compile(reg, flags), f.read()):
             chapters.append(
                 (timedelta_from_formatted(match.group('time')),
@@ -50,7 +50,7 @@ def parse_src_file(src: src_file, _print: bool = False) -> list[Chapter]:
     for f in playlist_dir.rglob("*"):
         if not os.path.isfile(f) or f.suffix.lower() != '.mpls':
             continue
-        with f.open('rb') as file:
+        with f.open('rb', encoding='utf-8') as file:
             header = mpls.load_movie_playlist(file)
             file.seek(header.playlist_start_address, os.SEEK_SET)
             playlist = mpls.load_playlist(file)
