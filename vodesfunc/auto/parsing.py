@@ -50,7 +50,7 @@ def parse_src_file(src: src_file, _print: bool = False) -> list[Chapter]:
     for f in playlist_dir.rglob("*"):
         if not os.path.isfile(f) or f.suffix.lower() != '.mpls':
             continue
-        with f.open('rb', encoding='utf-8') as file:
+        with f.open('rb') as file:
             header = mpls.load_movie_playlist(file)
             file.seek(header.playlist_start_address, os.SEEK_SET)
             playlist = mpls.load_playlist(file)
