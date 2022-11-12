@@ -33,14 +33,16 @@ class src_file:
         """
         self.file = file if isinstance(file, Path) else Path(file)
         self.src = idx(str(self.file.resolve())) if idx else src(str(self.file.resolve()), force_lsmas)
+        if trim_start is None:
+            trim_start = 0
         if trim_start != 0 or trim_end != 0:
             self.trim = (trim_start, trim_end)
-            if trim_start != 0 and trim_end != 0:
+            if trim_start != 0 and trim_end != 0 and trim_end != None:
                 self.src_cut = self.src[trim_start: trim_end]
             else:
                 if trim_start != 0:
                     self.src_cut = self.src[trim_start:]
-                else:
+                elif trim_end != None:
                     self.src_cut = self.src[:trim_end]
         else:
             self.src_cut = self.src
