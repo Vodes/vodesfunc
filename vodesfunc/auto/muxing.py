@@ -7,6 +7,7 @@ import os
 import ass
 from .fonts import validate_and_save_fonts
 from ..types import PathLike, Chapter
+from ..util import uniquify_path
 
 __all__: list[str] = [
     '_track',
@@ -93,6 +94,7 @@ class _track():
             else (TrackType(type) if isinstance(type, int) else TrackType[type.upper()])
 
     def mkvmerge_args(self) -> str:
+        self.file = self.file if isinstance(self.file, Path) else Path(self.file)
         if self.type == TrackType.ATTACHMENT:
             is_font = self.file.suffix.lower() in ['.ttf', '.otf']
             if not is_font and not self.lang:
@@ -189,7 +191,7 @@ class SubTrack(_track):
             else:
                 outdir = os.getcwd()
 
-            out_file = Path(os.path.join(outdir, f'{Path(file[0]).stem}-merged.ass'))
+            out_file = uniquify_path(Path(os.path.join(outdir, f'{Path(file[0]).stem}-merged.ass')))
             with open(out_file, 'w', encoding='utf_8_sig') as merge_write:
                 merged.dump_file(merge_write)
 
@@ -310,7 +312,7 @@ class SubTrack(_track):
         for line in doc.events:
             events.append(line)
             field = line.name if use_actor_field else line.effect
-            if field.lower().strip() == syncpoint.lower().strip():
+            if field.lower().strip() == syncpoint.lower().strip() or line.text.lower().strip() == syncpoint.lower().strip():
                 was_merged = True
                 start = line.start
                 offset = None
@@ -333,7 +335,7 @@ class SubTrack(_track):
                 doc.styles.append(style)
 
             doc.events = events
-            out_file = Path(os.path.join(self.file.parent, self.file.stem + "-merge.ass"))
+            out_file = uniquify_path(Path(os.path.join(self.file.parent, self.file.stem + "-merge.ass")))
             with open(out_file, 'w', encoding='utf_8_sig') as f:
                 doc.dump_file(f)
 

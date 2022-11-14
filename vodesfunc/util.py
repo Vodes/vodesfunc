@@ -4,6 +4,7 @@ from functools import partial
 from typing import Callable
 from pathlib import Path
 from .types import PathLike, Trim
+import os
 
 core = vs.core
 
@@ -163,6 +164,16 @@ def _print_frameinfo(clip: vs.VideoNode, title: str = '') -> vs.VideoNode:
     clip = core.std.FrameEval(clip, partial(FrameProps, clip=clip), prop_src=clip)
     clip = core.sub.Subtitle(clip, text=["".join(['\n'] * 4) + title], style=style)
     return clip
+
+def uniquify_path(path):
+    filename, extension = os.path.splitext(path)
+    counter = 1
+
+    while os.path.exists(path):
+        path = filename + " (" + str(counter) + ")" + extension
+        counter += 1
+
+    return path
 
 
 out = set_output
