@@ -10,10 +10,9 @@ core = vs.core
 
 
 __all__: list[str] = [
-    'nnedi_double',
-    'double_nnedi', 'NNEDI_Doubler',
-    'double_waifu2x', 'Waifu2x_Doubler',
-    'double_shader', 'Shader_Doubler', 'Clamped_Doubler',
+    'NNEDI_Doubler',
+    'Waifu2x_Doubler',
+    'Shader_Doubler', 'Clamped_Doubler',
     'vodes_rescale',
 ]
 
@@ -275,19 +274,6 @@ def vodes_rescale(
             depth(ref_out, get_depth(src)),
             credit_mask if isinstance(credit_mask, vs.VideoNode) else blank_mask,
             line_mask if isinstance(line_mask, vs.VideoNode) else blank_mask]
-
-def double_nnedi(clip: vs.VideoNode, opencl: bool = True, correct_shift: bool = True,
-                ediargs: dict[str, Any] = {"qual": 2, "nsize": 4, "nns": 4, "pscrn": 1}) -> vs.VideoNode:
-    return NNEDI_Doubler(opencl, **ediargs).double(clip, correct_shift)
-
-nnedi_double = double_nnedi
-
-def double_shader(clip: vs.VideoNode, shaderfile: PathLike) -> vs.VideoNode:
-    return Shader_Doubler(shaderfile).double(clip)
-
-def double_waifu2x(clip: vs.VideoNode, cuda: bool | str = 'trt', protect_edges: bool = True, fix_tint: bool = True, 
-        fp16: bool = True, num_streams: int = 1, **w2xargs) -> vs.VideoNode:
-    return Waifu2x_Doubler(cuda, fp16, num_streams, w2xargs).double(clip)
 
 def mod_padding(clip: vs.VideoNode, mod: int = 4, min: int = 4):
     from math import floor
