@@ -3,11 +3,13 @@ from pathlib import Path
 from typing import Optional
 from datetime import timedelta
 import os
+from fractions import Fraction
 
 import ass
 from .fonts import validate_and_save_fonts
 from ..types import PathLike, Chapter
 from ..util import uniquify_path
+from .convert import timedelta_to_frame, frame_to_timedelta
 
 __all__: list[str] = [
     '_track',
@@ -285,13 +287,15 @@ class SubTrack(_track):
         self.file = out_file
         return self
 
-    def syncpoint_merge(self, syncpoint: str, mergefile: PathLike | GlobSearch, use_actor_field: bool = False) -> "SubTrack":
+    def syncpoint_merge(self, syncpoint: str, mergefile: PathLike | GlobSearch, use_actor_field: bool = False, use_frames: bool = False, fps: Fraction = Fraction(24000, 1001)) -> "SubTrack":
         """
             Merge other sub files (Opening/Ending kfx for example) with offsetting by syncpoints
 
             :param syncpoint:           The syncpoint to be used
             :param mergefile:           The file to be merged
             :param use_actor_field:     Search the actor field instead of the effect field for the syncpoint
+            :param use_frames:          Uses frames to shift lines instead of direct timestamps
+            :param fps:                 The fps to go off of for the conversion
 
             :return:                    This SubTrack
         """
@@ -315,15 +319,28 @@ class SubTrack(_track):
             if field.lower().strip() == syncpoint.lower().strip() or line.text.lower().strip() == syncpoint.lower().strip():
                 was_merged = True
                 start = line.start
-                offset = None
+                offset: timedelta | int = None
+                for l in mergedoc.events:
+                    lfield = l.name if use_actor_field else l.effect
+                    if lfield.lower().strip() == syncpoint.lower().strip() or l.text.lower().strip() == syncpoint.lower().strip():
+                        mergedoc.events.remove(l)
+                        if use_frames:
+                            offset = timedelta_to_frame(start - l.start, fps)
+                        else:
+                            offset = start - l.start
+                        break
+
                 for l in sorted(mergedoc.events, key = lambda event: event.start):
-                    if not offset:
-                        offset = start - l.start
+                    if offset is None:
+                        if use_frames:
+                            offset = timedelta_to_frame(start - l.start, fps)
+                        else:
+                            offset = start - l.start
                         l.start = start
-                        l.end = (l.end + offset)
+                        l.end = (l.end + (frame_to_timedelta(offset, fps) if use_frames else offset))
                     else:
-                        l.start = (l.start + offset)
-                        l.end = (l.end + offset)
+                        l.start = (l.start + (frame_to_timedelta(offset, fps) if use_frames else offset))
+                        l.end = (l.end + (frame_to_timedelta(offset, fps) if use_frames else offset))
                     tomerge.append(l)
 
         if was_merged:
