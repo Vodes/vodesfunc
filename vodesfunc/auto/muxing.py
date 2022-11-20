@@ -200,8 +200,6 @@ class SubTrack(_track):
             file = out_file
             print('Done.\n')
 
-        # TODO: Daiz Autoswapper Functionality like subkt see https://github.com/Myaamori/SubKt/blob/master/src/main/kotlin/myaa/subkt/tasks/asstasks.kt#L606
-
         super().__init__(file, TrackType.SUB, name, lang, default, forced, delay)
 
     def collect_fonts(self, work_dir: Path, font_sources: list[str | Path] = None,
@@ -287,7 +285,8 @@ class SubTrack(_track):
         self.file = out_file
         return self
 
-    def syncpoint_merge(self, syncpoint: str, mergefile: PathLike | GlobSearch, use_actor_field: bool = False, use_frames: bool = False, fps: Fraction = Fraction(24000, 1001)) -> "SubTrack":
+    def syncpoint_merge(self, syncpoint: str, mergefile: PathLike | GlobSearch, use_actor_field: bool = False, 
+        use_frames: bool = False, fps: Fraction = Fraction(24000, 1001), override_p1: int | timedelta = None) -> "SubTrack":
         """
             Merge other sub files (Opening/Ending kfx for example) with offsetting by syncpoints
 
@@ -296,6 +295,8 @@ class SubTrack(_track):
             :param use_actor_field:     Search the actor field instead of the effect field for the syncpoint
             :param use_frames:          Uses frames to shift lines instead of direct timestamps
             :param fps:                 The fps to go off of for the conversion
+            :param override_p1:         A manual override of the initial syncpoint
+                                        Obviously either a frame number or timedelta
 
             :return:                    This SubTrack
         """
@@ -318,7 +319,7 @@ class SubTrack(_track):
             field = line.name if use_actor_field else line.effect
             if field.lower().strip() == syncpoint.lower().strip() or line.text.lower().strip() == syncpoint.lower().strip():
                 was_merged = True
-                start = line.start
+                start = line.start if override_p1 is None else override_p1
                 offset: timedelta | int = None
                 for l in mergedoc.events:
                     lfield = l.name if use_actor_field else l.effect
