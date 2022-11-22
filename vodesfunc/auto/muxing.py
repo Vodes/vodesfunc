@@ -1,14 +1,14 @@
 from enum import IntEnum
 from pathlib import Path
-from typing import Optional
 from datetime import timedelta
 import os
 from fractions import Fraction
 
 import ass
 from .fonts import validate_and_save_fonts
-from ..types import PathLike, Chapter
+from ..types import PathLike, Chapter, TrackType
 from ..util import uniquify_path
+from ..automation import get_workdir
 from .convert import timedelta_to_frame, frame_to_timedelta
 
 __all__: list[str] = [
@@ -22,14 +22,6 @@ __all__: list[str] = [
     'TrackType',
     'VideoTrack', 'VT',
 ]
-
-class TrackType(IntEnum):
-    VIDEO = 1
-    AUDIO = 2
-    SUB = 3
-    ATTACHMENT = 4
-    CHAPTERS = 5
-    MKV = 6
 
 
 class GlobSearch():
@@ -183,17 +175,8 @@ class SubTrack(_track):
                         print(f'WARN: Ignoring style "{style.name}" due to preexisting style of the same name!')
                         continue
                     merged.styles.append(style)
-
-            # This stuff is kinda ugly but I don't want to pass the Setup object or a workdir into the constructor...
-            outdir = os.path.join(os.getcwd(), '_workdir')
-            if os.path.exists(outdir):
-                merge_dir = os.path.join(outdir, 'merged')
-                Path(merge_dir).mkdir(exist_ok=True)
-                outdir = merge_dir
-            else:
-                outdir = os.getcwd()
-
-            out_file = uniquify_path(Path(os.path.join(outdir, f'{Path(file[0]).stem}-merged.ass')))
+                
+            out_file = uniquify_path(Path(os.path.join(get_workdir(), f'{Path(file[0]).stem}-merged.ass')))
             with open(out_file, 'w', encoding='utf_8_sig') as merge_write:
                 merged.dump_file(merge_write)
 
@@ -202,7 +185,7 @@ class SubTrack(_track):
 
         super().__init__(file, TrackType.SUB, name, lang, default, forced, delay)
 
-    def collect_fonts(self, work_dir: Path, font_sources: list[str | Path] = None,
+    def collect_fonts(self, work_dir: Path = get_workdir(), font_sources: list[str | Path] = None,
                       debug_output: bool = False) -> list[Attachment]:
         """
             Validates and copies the fonts needed for this track into the specified `work_dir`.
@@ -278,7 +261,7 @@ class SubTrack(_track):
             events.append(line)
         
         doc.events = events
-        out_file = Path(os.path.join(self.file.parent, self.file.stem + "-swapped.ass"))
+        out_file = Path(os.path.join(get_workdir(), self.file.stem + "-swapped.ass"))
         with open(out_file, 'w', encoding='utf_8_sig') as f:
             doc.dump_file(f)
         
@@ -353,7 +336,7 @@ class SubTrack(_track):
                 doc.styles.append(style)
 
             doc.events = events
-            out_file = uniquify_path(Path(os.path.join(self.file.parent, self.file.stem + "-merge.ass")))
+            out_file = uniquify_path(Path(os.path.join(get_workdir(), self.file.stem + "-merge.ass")))
             with open(out_file, 'w', encoding='utf_8_sig') as f:
                 doc.dump_file(f)
 

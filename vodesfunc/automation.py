@@ -10,13 +10,14 @@ from datetime import timedelta
 
 import vapoursynth as vs
 
-from .auto import muxing
 from .auto.download import get_executable
 from .auto.convert import timedelta_to_frame, frame_to_timedelta, format_timedelta
 from .auto.parsing import parse_ogm, parse_xml, parse_src_file
-from .auto.muxing import VT, AT, ST, VideoTrack, AudioTrack, SubTrack, Attachment, GlobSearch, TrackType
-from .types import PathLike, Trim, Zone, Chapter
-from .util import src_file
+from .types import PathLike, Trim, Zone, Chapter, TrackType
+from .util import src_file, uniquify_path
+
+global setup
+setup = None
 
 __all__: list[str] = [
     'Chapters',
@@ -52,6 +53,7 @@ class Setup:
             :param episode:         Episode identifier(?)
             :param config_file:     Path to config file (defaults to 'config.ini' in current working dir)
         """
+
         if config_file:
             config = ConfigParser()
             config_name = 'config.ini'
@@ -82,6 +84,9 @@ class Setup:
         self.episode = episode
         self.work_dir = Path(os.path.join(os.getcwd(), "_workdir", episode))
         self.work_dir.mkdir(parents=True, exist_ok=True)
+
+        global setup
+        setup = self
         return None
 
     def encode_video(self, clip: vs.VideoNode, settings: str, zones: Zone | list[Zone] = None,
@@ -157,7 +162,7 @@ class Setup:
             :return:                    Absolute filepath for resulting audio file
         """
         encoder_settings = ' ' + encoder_settings.strip()
-
+        
         if trim is not None:
             if isinstance(file, src_file):
                 print("Warning: trims in src_file types will overwrite other trims passed!")
@@ -333,6 +338,20 @@ class Setup:
     video = encode_video
     audio = encode_audio
 
+def get_setup() -> Setup:
+    global setup
+    return setup
+
+def get_workdir() -> Path:
+    if get_setup() is None:
+        return os.getcwd()
+    return get_setup().work_dir
+
+setup: Setup | None = None
+
+from .auto import muxing
+from .auto.muxing import VT, AT, ST, VideoTrack, AudioTrack, SubTrack, Attachment, GlobSearch, _track
+
 class Chapters():
 
     chapters: list[Chapter] = []
@@ -384,7 +403,7 @@ class Chapters():
 
     def trim(self, trim_start: int = 0, trim_end: int = 0, src: src_file = None):
         if trim_start > 0:
-            chapters: list[muxing.Chapter] = []
+            chapters: list[Chapter] = []
             for chapter in self.chapters:
                 if timedelta_to_frame(chapter[0]) == 0:
                     chapters.append(chapter)
@@ -401,7 +420,7 @@ class Chapters():
             self.chapters = chapters
         if trim_end != 0:
             if trim_end > 0:
-                chapters: list[muxing.Chapter] = []
+                chapters: list[Chapter] = []
                 for chapter in self.chapters:
                     if timedelta_to_frame(chapter[0], self.fps) < trim_end:
                         chapters.append(chapter)
@@ -421,7 +440,7 @@ class Chapters():
         if len(names) < len(old):
             names += [None] * (len(old) - len(names))
 
-        chapters: list[muxing.Chapter] = []
+        chapters: list[Chapter] = []
         for i, name in enumerate(names):
             current = list(self.chapters[i])
             current[1] = name
@@ -475,7 +494,7 @@ class Chapters():
         print("", end='\n')
         return self
 
-    def to_file(self, out: PathLike = Path(os.getcwd())) -> str:
+    def to_file(self, out: PathLike = Path(get_workdir())) -> str:
         """
             Outputs the chapters to an OGM file
 
@@ -518,7 +537,7 @@ class Mux():
         self.commandline = f'"{mkvmerge}" -o "{self.outfile.resolve()}" --title "{mkvtitle}"'
 
         for track in tracks:
-            if isinstance(track, muxing._track):
+            if isinstance(track, _track):
                 self.commandline += track.mkvmerge_args()
                 continue
             elif isinstance(track, Chapters):

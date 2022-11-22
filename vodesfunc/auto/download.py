@@ -17,6 +17,7 @@ types: dict = {
     'opusenc': 'https://archive.mozilla.org/pub/opus/win32/opus-tools-0.2-opus-1.3.zip',
     'qaac': 'https://github.com/nu774/qaac/releases/download/v2.76/qaac_2.76.zip',
     'x265': 'https://github.com/DJATOM/x265-aMod/releases/download/3.5+20/x265-x64-v3.5+20-aMod-gcc10.3.0-opt-znver3.7z',
+    'x264': 'https://github.com/DJATOM/x264-aMod/releases/download/r3101%2B20/x264-aMod-x64-core164-r3101+20.7z',
     'mkvmerge': 'https://www.fosshub.com/MKVToolNix.html?dwl=mkvtoolnix-64-bit-71.1.0.7z',
     'mkvextract': 'https://www.fosshub.com/MKVToolNix.html?dwl=mkvtoolnix-64-bit-71.1.0.7z'
 }
@@ -41,7 +42,7 @@ def download_binary(type: str) -> str:
     executable: Path = None
     executables = binary_dir.rglob(type.lower() + "*.exe")
 
-    for exe in executables:
+    for exe in sorted(executables):
         if exe.is_file():
             return exe.resolve()
 
@@ -53,7 +54,7 @@ def download_binary(type: str) -> str:
 
     executables = binary_dir.rglob(type.lower() + "*.exe")
 
-    for exe in executables:
+    for exe in sorted(executables):
         if exe.is_file():
             executable = exe
 
