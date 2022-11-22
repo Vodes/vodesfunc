@@ -47,14 +47,13 @@ class NNEDI_Doubler(Doubler):
 
     def double(self, clip: vs.VideoNode, correct_shift: bool = True) -> vs.VideoNode:
         y = get_y(clip)
-
         # nnedi3cl needs padding, to avoid issues on edges (https://slow.pics/c/QcJef38u)
         if self.opencl:
             (left, right, top, bottom) = mod_padding(y, 2, 2)
             width = clip.width + left + right
             height = clip.height + top + bottom
-            y = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
-            doubled_y = y.nnedi3cl.NNEDI3CL(dh=True, field=0, **self.ediargs).std.Transpose() \
+            pad = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
+            doubled_y = pad.nnedi3cl.NNEDI3CL(dh=True, field=0, **self.ediargs).std.Transpose() \
                 .nnedi3cl.NNEDI3CL(dh=True, field=0, **self.ediargs).std.Transpose()
             doubled_y = doubled_y.std.Crop(left * 2, right * 2, top * 2, bottom * 2)
         else:
@@ -65,7 +64,7 @@ class NNEDI_Doubler(Doubler):
         if correct_shift:
             doubled_y = doubled_y.resize.Bicubic(src_top=.5, src_left=.5)
 
-        return doubled_y
+        return doubled_y.std.CopyFrameProps(y)
 
 class Shader_Doubler(Doubler):
     shaderfile: str 
@@ -112,14 +111,14 @@ class Waifu2x_Doubler(Doubler):
         (left, right, top, bottom) = mod_padding(y)
         width = clip.width + left + right
         height = clip.height + top + bottom
-        y = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
+        pad = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
         
-        dsrgb = y.std.ShufflePlanes(0, vs.RGB)
+        dsrgb = pad.std.ShufflePlanes(0, vs.RGB)
         up = Waifu2x(dsrgb, noise=-1, model=6, backend=self.backend, **self.kwargs)
         up = up.std.ShufflePlanes(0, vs.GRAY)
         up = up.std.Crop(left * 2, right * 2, top * 2, bottom * 2)
         up = up.std.Expr("x 0.5 255 / +")
-        return depth(up, get_depth(clip))
+        return depth(up, get_depth(clip)).std.CopyFrameProps(y)
  
 class Clamped_Doubler(Doubler):
 
