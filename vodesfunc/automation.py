@@ -9,6 +9,7 @@ from typing import Callable
 from datetime import timedelta
 
 import vapoursynth as vs
+from vstools import Matrix, Primaries, Transfer, ColorRange, ChromaLocation
 
 from .auto.download import get_executable
 from .auto.convert import timedelta_to_frame, frame_to_timedelta, format_timedelta
@@ -23,7 +24,7 @@ __all__: list[str] = [
     'Chapters',
     'light_sucks',
     'Mux',
-    'settings_builder', 'sb',
+    'settings_builder_x265', 'sb', 'sb264', 'sb265',
     'Setup',
     'VT', 'AT', 'ST',
     'VideoTrack', 'AudioTrack', 'SubTrack',
@@ -89,53 +90,71 @@ class Setup:
         setup = self
         return None
 
-    def encode_video(self, clip: vs.VideoNode, settings: str, zones: Zone | list[Zone] = None,
+    def encode_video(self, clip: vs.VideoNode, settings: str = '', zones: Zone | list[Zone] = None, codec: str = 'x265',
                      save_csv_log: bool = True, generate_qpfile: bool = True, src: vs.VideoNode | src_file = None,
-                     print_command: bool = False) -> str:
+                     specify_props: bool = True, print_command: bool = False) -> str:
         """
-            Encodes the clip you pass into it with x265
+            Encodes the clip you pass into it with your desired encoder
 
             :param clip:            Clip to be encoded
-            :param settings:        Settings passed to x265. I recommend using the settings_builder function
+            :param settings:        Settings passed to the encoder. I recommend using the settings_builder function
             :param zones:           Zone(s) like these (start, end, bitrate_multiplier)
+            :param codec:           x265, x264 and ffv1 are supported
             :param save_csv_log:    Saves the csv log file from x265
             :param generate_qpfile: Automatically generates a qpfile from your source clip (would not recommend running on the filtered clip)
             :param src:             Source Clip or `src_file` for the qpfile generation
-            :param print_command:   Prints the final x265 command before running it
+            :param specify_props:   Specify color related props to the encoder if using x265 or x264
+            :param print_command:   Prints the final encoder command before running it
             :return:                Absolute filepath for resulting video file
         """
-        x265_exe = get_executable('x265', self.allow_binary_download)
+        if codec.lower() not in ['x265', 'x264', 'ffv1']:
+            raise ValueError('encode_video: codec has to be either x265, x264 or ffv1')
+        encoder_exe = get_executable('ffmpeg' if codec.lower() == 'ffv1' else codec, self.allow_binary_download)
         args = settings
-        # TODO: range, matrix, etc. parsing from the clip
-        args += f' --output-depth {clip.format.bits_per_sample} --range limited --colorprim 1 --transfer 1 --colormatrix 1'
 
-        if zones:
-            zones_settings: str = ''
-            for i, ((start, end, multiplier)) in enumerate(zones):
-                zones_settings += f'{start},{end},b={multiplier}'
-                if i != len(zones) - 1:
-                    zones_settings += '/'
-            args += f' --zones {zones_settings}'
+        if codec.lower() in ['x265', 'x264']:
+            if zones:
+                zones_settings: str = ''
+                for i, ((start, end, multiplier)) in enumerate(zones):
+                    zones_settings += f'{start},{end},b={multiplier}'
+                    if i != len(zones) - 1:
+                        zones_settings += '/'
+                args += f' --zones {zones_settings}'
 
-        if save_csv_log:
-            args += f' --csv "{Path(self.show_name + "_log_x265.csv").resolve()}"'
-        if generate_qpfile:
-            if isinstance(src, vs.VideoNode) or isinstance(src, src_file):
-                src = src if isinstance(src, vs.VideoNode) else src.src_cut
-                qpfile = self.generate_qp_file(src)
-                if qpfile:
-                    args += f' --qpfile "{qpfile}"'
+            if save_csv_log and codec.lower() == 'x265':
+                args += f' --csv "{Path(self.show_name + "_log_x265.csv").resolve()}"'
+            if generate_qpfile:
+                if isinstance(src, vs.VideoNode) or isinstance(src, src_file):
+                    src = src if isinstance(src, vs.VideoNode) else src.src_cut
+                    qpfile = self.generate_qp_file(src)
+                    if qpfile:
+                        args += f' --qpfile "{qpfile}"'
+                else:
+                    print("encode_video: No 'src' parameter passed, Skipping qpfile creation!")
+
+            if specify_props:
+                bits = clip.format.bits_per_sample
+                c_range = ColorRange.from_video(clip).string if codec.lower() == 'x265' else \
+                    ('tv' if ColorRange.from_video(clip) == ColorRange.LIMITED else 'pc')
+                args += f' --input-depth {bits} --output-depth {bits} --colorprim {Primaries.from_video(clip).string}'
+                args += f' --transfer {Transfer.from_video(clip).string} --colormatrix {Matrix.from_video(clip).string}'
+                args += f' --chromaloc {int(ChromaLocation.from_video(clip))} --range {c_range}'
+
+            outpath = self.work_dir.joinpath(self.episode + "." + codec.strip('x')).resolve()
+            if codec.lower() == 'x265':
+                encoder_command = f'"{encoder_exe}" -o "{outpath}" - --y4m ' + args.strip()
             else:
-                print("encode_video: No 'src' parameter passed, Skipping qpfile creation!")
-
-        outpath = self.work_dir.joinpath(self.episode + ".265").resolve()
-        x265_command = f'"{x265_exe}" -o "{outpath}" - --y4m ' + args.strip()
-
+                encoder_command = f'"{encoder_exe}" -o "{outpath}" --demuxer y4m - ' + args.strip()
+        else:
+            if not args:
+                args = f'-coder 1 -context 0 -g 1 -level 3 -threads 0 -slices 24 -slicecrc 1'
+            outpath = self.work_dir.joinpath(self.episode + ".mkv").resolve()
+            encoder_command = f'"{encoder_exe}" -f yuv4mpegpipe -i - -c:v ffv1 {args.strip()} "{outpath}"'
         if print_command:
-            print(f'\nx265 Command:\n{x265_command}\n')
+            print(f'\nxEncoder Command:\n{encoder_command}\n')
 
-        print(f"Encoding episode {self.episode}...")
-        process = subprocess.Popen(x265_command, stdin=subprocess.PIPE)
+        print(f"Encoding episode {self.episode} to {codec}...")
+        process = subprocess.Popen(encoder_command, stdin=subprocess.PIPE)
         clip.output(process.stdin, y4m=True, progress_update=lambda x, y: self._update_progress(x, y))
         process.communicate()
 
@@ -572,26 +591,51 @@ class Mux():
         return str(self.outfile.resolve())
 
 
-def settings_builder(
+def settings_builder_x265(
         preset: str | int = 'slow', crf: float = 14.5, qcomp: float = 0.75,
         psy_rd: float = 2.0, psy_rdoq: float = 2.0, aq_strength: float = 0.75, aq_mode: int = 3, rd: int = 4,
         rect: bool = True, amp: bool = False, chroma_qpoffsets: int = -2, tu_intra_depth: int = 2,
         tu_inter_depth: int = 2, rskip: bool | int = 0, tskip: bool = False, ref: int = 4, bframes: int = 16,
         cutree: bool = False, rc_lookahead: int = 60, subme: int = 5, me: int = 3, b_intra: bool = True,
-        weightb: bool = True, append: str = "") -> str:
+        weightb: bool = True, deblock: list[int] | str = [-2, -2], sar: int = 1, append: str = "") -> str:
 
     # Simple insert values
     settings = f" --preset {preset} --crf {crf} --bframes {bframes} --ref {ref} --rc-lookahead {rc_lookahead} --subme {subme} --me {me}"
     settings += f" --aq-mode {aq_mode} --aq-strength {aq_strength} --qcomp {qcomp} --cbqpoffs {chroma_qpoffsets} --crqpoffs {chroma_qpoffsets}"
-    settings += f" --rd {rd} --psy-rd {psy_rd} --psy-rdoq {psy_rdoq} --tu-intra-depth {tu_intra_depth} --tu-inter-depth {tu_inter_depth}"
+    settings += f" --rd {rd} --psy-rd {psy_rd} --psy-rdoq {psy_rdoq} --tu-intra-depth {tu_intra_depth} --tu-inter-depth {tu_inter_depth} --sar {sar}"
 
     # Less simple
     settings += f" --{'rect' if rect else 'no-rect'} --{'amp' if amp else 'no-amp'} --{'tskip' if tskip else 'no-tskip'}"
     settings += f" --{'b-intra' if b_intra else 'no-b-intra'} --{'weightb' if weightb else 'no-weightb'} --{'cutree' if cutree else 'no-cutree'}"
     settings += f" --rskip {int(rskip) if isinstance(rskip, bool) else rskip}"
 
+    if isinstance(deblock, list):
+        deblock = f"{str(deblock[0])}:{str(deblock[1])}"
+    settings += f" --deblock={deblock}"
+
     # Don't need to change these lol
-    settings += " --deblock=-2:-2 --no-sao --no-sao-non-deblock --no-strong-intra-smoothing --no-open-gop"
+    settings += " --no-sao --no-sao-non-deblock --no-strong-intra-smoothing --no-open-gop"
+
+    settings += (" " + append.strip()) if append.strip() else ""
+    return settings
+
+def settings_builder_x264(
+        preset: str = 'placebo', crf: float = 13, qcomp: float = 0.7, psy_rd: float = 1.0, psy_trellis: float = 0.0, trellis: int = 0,
+        aq_strength: float = 0.8, aq_mode: int = 3, ref: int = 16, bframes: int = 16, mbtree: bool = False, rc_lookahead: int = 250, me: str = "umh",
+        subme: int = 11, threads: int = 6,
+        merange: int = 32, deblock: list[int] | str = [-1, -1], dct_decimate: bool = False, sar: str = "1:1", append: str = "") -> str:
+
+    # Simple insert values
+    settings = f" --preset {preset} --crf {crf} --bframes {bframes} --ref {ref} --rc-lookahead {rc_lookahead} --me {me} --merange {merange}"
+    settings += f" --aq-mode {aq_mode} --aq-strength {aq_strength} --qcomp {qcomp}"
+    settings += f" --psy-rd {psy_rd}:{psy_trellis} --trellis {trellis} --subme {subme} --threads {threads} --sar {sar}"
+
+    # Less simple
+    settings += f" {'--no-mbtree' if not mbtree else ''} {'--no-dct-decimate' if not dct_decimate else ''}"
+
+    if isinstance(deblock, list):
+        deblock = f"{str(deblock[0])}:{str(deblock[1])}"
+    settings += f" --deblock={deblock}"
 
     settings += (" " + append.strip()) if append.strip() else ""
     return settings
@@ -619,4 +663,6 @@ def run_commandline(command: str, quiet: bool = True, shell: bool = False):
     
     p.wait()
 
-sb = settings_builder
+sb = settings_builder_x265
+sb265 = sb
+sb264 = settings_builder_x264

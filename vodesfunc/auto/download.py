@@ -65,9 +65,9 @@ def unpack_all(dir: str | Path):
     dir = Path(dir) if isinstance(dir, str) else dir
 
     for file in dir.rglob('*.zip'):
-        sh.unpack_archive(file, dir)
+        sh.unpack_archive(file, Path(dir.stem).mkdir(exist_ok=True))
         os.remove(file)
 
     for file in dir.rglob('*.7z'):
-        p7z.unpack_7zarchive(file, dir)
+        p7z.unpack_7zarchive(file, Path(dir.stem).mkdir(exist_ok=True))
         os.remove(file)
