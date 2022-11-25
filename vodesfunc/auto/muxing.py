@@ -106,7 +106,10 @@ class _track():
         delay_args = f' --sync 0:{self.delay}' if self.delay != 0 else ''
         default_args = f' --default-track-flag 0:{"yes" if self.default else "no"}'
         forced_args = f' --forced-display-flag 0:{"yes" if self.forced else "no"}'
-        return f'{name_args}{lang_args}{default_args}{forced_args}{delay_args} "{self.file.resolve()}"'
+        timecode_args = ''
+        if isinstance(self, VideoTrack) and self.timecode_file is not None:
+            timecode_args = f' --timestamps 0:"{self.timecode_file.resolve()}"'
+        return f'{timecode_args}{name_args}{lang_args}{default_args}{forced_args}{delay_args} "{self.file.resolve()}"'
 
 
 class VideoTrack(_track):
@@ -114,9 +117,15 @@ class VideoTrack(_track):
         _track object with VIDEO type preselected and japanese language default
     """
 
-    def __init__(self, file: PathLike | GlobSearch, name: str = '', lang: str = 'ja', default: bool = True, forced: bool = False, delay: int = 0) -> None:
+    timecode_file: PathLike | None = None
+
+    def __init__(self, file: PathLike | GlobSearch, name: str = '', lang: str = 'ja', default: bool = True, forced: bool = False, delay: int = 0, timecode_file: PathLike | GlobSearch = None) -> None:
         if isinstance(file, GlobSearch):
             file = file.paths[0] if isinstance(file.paths, list) else file.paths
+        if timecode_file is not None:
+            if isinstance(timecode_file, GlobSearch):
+                timecode_file = timecode_file.paths[0] if isinstance(timecode_file.paths, list) else timecode_file.paths
+            self.timecode_file = timecode_file if isinstance(timecode_file, Path) else Path(timecode_file)
         super().__init__(file, TrackType.VIDEO, name, lang, default, forced, delay)
 
 
