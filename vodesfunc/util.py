@@ -5,6 +5,7 @@ from typing import Callable
 from pathlib import Path
 from .types import PathLike, Trim
 import os
+import binascii
 
 core = vs.core
 
@@ -174,6 +175,11 @@ def uniquify_path(path):
         counter += 1
 
     return path
+
+def get_crc32(file: PathLike) -> str:
+    buf = open(file, 'rb').read()
+    buf = (binascii.crc32(buf) & 0xFFFFFFFF)
+    return "%08X" % buf
 
 
 out = set_output

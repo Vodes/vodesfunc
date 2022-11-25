@@ -15,7 +15,7 @@ from .auto.download import get_executable
 from .auto.convert import timedelta_to_frame, frame_to_timedelta, format_timedelta
 from .auto.parsing import parse_ogm, parse_xml, parse_src_file
 from .types import PathLike, Trim, Zone, Chapter, TrackType
-from .util import src_file, uniquify_path
+from .util import src_file, uniquify_path, get_crc32
 
 global setup
 setup = None
@@ -588,6 +588,11 @@ class Mux():
         if self.setup.clean_work_dirs == True and code == 0:
             sh.rmtree(self.setup.work_dir)
         print("Done.")
+        absolute = str(self.outfile.resolve())
+        if r'$crc32$' in absolute:
+            print("Generating CRC32 for muxed file...")
+            self.outfile = self.outfile.rename(re.sub(r'\$crc32\$', get_crc32(self.outfile), absolute))
+            print("Done.")
         return str(self.outfile.resolve())
 
 
