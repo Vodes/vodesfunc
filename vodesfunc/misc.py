@@ -9,7 +9,8 @@ from typing import Callable
 def lehmer_merge(*clips: vs.VideoNode, 
         lowpass: Callable[[vs.VideoNode], vs.VideoNode]=lambda i: core.std.BoxBlur(i, hradius=3, vradius=3, hpasses=2, vpasses=2)):
     """
-        Perform a lehmer merge using a bunch of clips with the goal of getting the detail from each
+        Perform a lehmer merge using a bunch of clips with the goal of getting the detail from each.
+        Credits to Zewia
 
         :param clips:       However many clips
         :param lowpass:     Callable used to perform the lowpass
