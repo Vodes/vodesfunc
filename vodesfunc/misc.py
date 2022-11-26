@@ -16,6 +16,7 @@ def lehmer_merge(*clips: vs.VideoNode,
 
         :return:            Merged clip
     """
+    clips = list(clips)
     count = len(clips)
     expr = ""
 
