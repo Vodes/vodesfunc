@@ -1,20 +1,44 @@
-"""
-A collection of functions to make me embrace my laziness
-"""
-from functools import partial
-from typing import Any
-
 import vapoursynth as vs
-from vstools import depth, get_y
-
 core = vs.core
 
+from vstools import depth, get_y
+from functools import partial
+from typing import Callable
 
-# Anything else
+
+def lehmer_merge(*clips: vs.VideoNode, 
+        lowpass: Callable[[vs.VideoNode], vs.VideoNode]=lambda i: core.std.BoxBlur(i, hradius=3, vradius=3, hpasses=2, vpasses=2)):
+    """
+        Perform a lehmer merge using a bunch of clips with the goal of getting the detail from each
+
+        :param clips:       However many clips
+        :param lowpass:     Callable used to perform the lowpass
+
+        :return:            Merged clip
+    """
+    count = len(clips)
+    expr = ""
+
+    for i in range(count):
+        expr += f"src{i} src{count + i} - D{i}! "
+
+    for v in range(2):
+        for i in range(count):
+            expr += f"D{i}@ {v + 2} pow "
+        expr += "+ " * (count - 1) + f"P{v}! "
+
+    for i in range(count):
+        expr += f"src{count + i} "
+    expr += "+ " * (count - 1) + f"{count} / "
+
+    expr += "P0@ 0 = 0 P1@ P0@ / ? +"
+
+    blur = [lowpass(i) for i in clips]
+    return core.akarin.Expr(clips + blur, expr)
 
 
 def dirty_prop_set(clip: vs.VideoNode, threshold: int = 1100, luma_scaling: int = 24, prop_name: str = None,
-                   src_prop_val: Any = None, bbm_prop_val: any = None, debug_output: bool = False
+                   src_prop_val: any = None, bbm_prop_val: any = None, debug_output: bool = False
                    ) -> list[vs.VideoNode]:
     """
     Dirty-edge-based frameprop setting function using bbm, a brightness difference check and a brightness scaling
