@@ -106,7 +106,7 @@ class Waifu2x_Doubler(Doubler):
 
     def double(self, clip: vs.VideoNode) -> vs.VideoNode:
         from vsmlrt import Waifu2x
-        y = depth(get_y(clip), 32)
+        y = depth(get_y(clip), 32).std.Limiter()
     
         (left, right, top, bottom) = mod_padding(y)
         width = clip.width + left + right
