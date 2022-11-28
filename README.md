@@ -7,4 +7,6 @@ Contains various functions for automation and other stuff I use in my scripts
 
 ## Installation
 
-`pip install git+https://github.com/Vodes/vodesfunc.git`
+`pip install vodesfunc` <br>for ~~mostly~~ stable versions
+
+`pip install git+https://github.com/Vodes/vodesfunc.git` <br>for absolutely latest
