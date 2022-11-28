@@ -1,0 +1,4 @@
+include requirements.txt
+
+exclude docs/*
+exclude test/*
