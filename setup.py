@@ -29,7 +29,7 @@ setuptools.setup(
     },
     install_requires=install_requires,
     project_urls={
-        "Source Code": 'https: // github.com/Vodes/vodesfunc',
+        "Source Code": 'https://github.com/Vodes/vodesfunc',
         "Contact": 'https://discord.gg/Kf94Nv6WVN',
     },
     classifiers=[
