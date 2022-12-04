@@ -308,8 +308,10 @@ class SubTrack(_track):
 
         for line in doc.events:
             events.append(line)
+            if was_merged:
+                continue
             field = line.name if use_actor_field else line.effect
-            if field.lower().strip() == syncpoint.lower().strip() or line.text.lower().strip() == syncpoint.lower().strip():
+            if field.lower().strip() == syncpoint.lower().strip() or line.text.lower().strip() == syncpoint.lower().strip() or override_p1 is not None:
                 was_merged = True
                 start = line.start if override_p1 is None else override_p1
                 offset: timedelta | int = None
