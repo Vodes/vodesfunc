@@ -4,7 +4,8 @@
 
 # flake8: noqa
 
-from . import automation, misc, noise, scale, util
+from . import aa, automation, misc, noise, scale, util
+from .aa import *
 from .automation import *
 from .auto.convert import *
 from .misc import *
