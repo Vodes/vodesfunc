@@ -18,8 +18,8 @@ types: dict = {
     'qaac': 'https://github.com/nu774/qaac/releases/download/v2.76/qaac_2.76.zip',
     'x265': 'https://github.com/DJATOM/x265-aMod/releases/download/3.5+20/x265-x64-v3.5+20-aMod-gcc10.3.0-opt-znver3.7z',
     'x264': 'https://github.com/DJATOM/x264-aMod/releases/download/r3101%2B20/x264-aMod-x64-core164-r3101+20.7z',
-    'mkvmerge': 'https://www.fosshub.com/MKVToolNix.html?dwl=mkvtoolnix-64-bit-71.1.0.7z',
-    'mkvextract': 'https://www.fosshub.com/MKVToolNix.html?dwl=mkvtoolnix-64-bit-71.1.0.7z'
+    'mkvmerge': 'https://www.fosshub.com/MKVToolNix.html?dwl=mkvtoolnix-64-bit-72.0.0.7z',
+    'mkvextract': 'https://www.fosshub.com/MKVToolNix.html?dwl=mkvtoolnix-64-bit-72.0.0.7z'
 }
 
 def get_executable(type: str, can_download: bool = True) -> str:
