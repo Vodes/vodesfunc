@@ -1,8 +1,8 @@
 from typing import Any, Callable
 
 import vapoursynth as vs
-from vskernels import Catrom, Hermite, Kernel, Scaler
-from vstools import depth, get_depth, get_y, iterate, ColorRange, join, split, Matrix
+from vskernels import Catrom, Kernel
+from vstools import depth, get_depth, get_y, iterate, ColorRange, Matrix
 from .types import PathLike
 from abc import ABC, abstractmethod
 
