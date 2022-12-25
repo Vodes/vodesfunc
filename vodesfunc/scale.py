@@ -1,8 +1,8 @@
 from typing import Any, Callable
 
 import vapoursynth as vs
-from vskernels import Catrom, Kernel
-from vstools import depth, get_depth, get_y, iterate, ColorRange
+from vskernels import Catrom, Hermite, Kernel, Scaler
+from vstools import depth, get_depth, get_y, iterate, ColorRange, join, split, Matrix
 from .types import PathLike
 from abc import ABC, abstractmethod
 
@@ -106,19 +106,30 @@ class Waifu2x_Doubler(Doubler):
 
     def double(self, clip: vs.VideoNode) -> vs.VideoNode:
         from vsmlrt import Waifu2x
-        y = depth(get_y(clip), 32).std.Limiter()
-    
-        (left, right, top, bottom) = mod_padding(y)
-        width = clip.width + left + right
-        height = clip.height + top + bottom
-        pad = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
-        
-        dsrgb = pad.std.ShufflePlanes(0, vs.RGB)
-        up = Waifu2x(dsrgb, noise=-1, model=6, backend=self.backend, **self.kwargs)
-        up = up.std.ShufflePlanes(0, vs.GRAY)
+        pre = depth(clip, 32).std.Limiter()
+
+        (left, right, top, bottom) = mod_padding(pre)
+        width = pre.width + left + right
+        height = pre.height + top + bottom
+        pad = pre.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
+
+        was_444 = pre.format.color_family == vs.YUV and pre.format.subsampling_w == 0 and pre.format.subsampling_h == 0
+
+        if was_444:
+            pad = Catrom().resample(pad, format=vs.RGBS, matrix=Matrix.RGB, matrix_in=Matrix.from_video(pre))
+        else: 
+            pad = get_y(pad).std.ShufflePlanes(0, vs.RGB)
+
+        up = Waifu2x(pad, noise=-1, model=6, backend=self.backend, **self.kwargs)
+
+        if was_444:
+            up = Catrom().resample(up, format=vs.YUV444PS, matrix=Matrix.from_video(pre), matrix_in=Matrix.RGB)
+        else:
+            up = up.std.ShufflePlanes(0, vs.GRAY)
+
         up = up.std.Crop(left * 2, right * 2, top * 2, bottom * 2)
         up = up.std.Expr("x 0.5 255 / +")
-        return depth(up, get_depth(clip)).std.CopyFrameProps(y)
+        return depth(up, get_depth(clip)).std.CopyFrameProps(pre)
  
 class Clamped_Doubler(Doubler):
 
