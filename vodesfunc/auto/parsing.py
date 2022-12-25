@@ -4,7 +4,6 @@ from pathlib import Path
 from fractions import Fraction
 from pyparsebluray import mpls
 from ..types import Chapter
-from ..util import src_file
 from .convert import timedelta_from_formatted, timedelta_to_frame, \
         frame_to_timedelta, mpls_timestamp_to_timedelta, format_timedelta
 
@@ -12,7 +11,8 @@ from .convert import timedelta_from_formatted, timedelta_to_frame, \
 __all__: list[str] = [
     'parse_ogm',
     'parse_xml',
-    'parse_src_file'
+    'parse_src_file',
+    'parse_m2ts_path'
 ]
 
 OGM_REGEX = r'(^CHAPTER(?P<num>\d+)=(?P<time>.*)\nCHAPTER\d\dNAME=(?P<name>.*))'
@@ -35,6 +35,17 @@ def _parse_chapters(file: Path, reg: str, flags: int = 0) -> list[Chapter]:
 
     return chapters
 
+def parse_m2ts_path(dgiFile: Path) -> Path:
+    with open(dgiFile, 'r') as fp:
+        for i, line in enumerate(fp):
+            for match in re.finditer(re.compile(r"^(.*\.m2ts) \d+$", re.IGNORECASE), line):
+                m2tsFile = Path(match.group(1))
+                if m2tsFile.exists():
+                    return m2tsFile
+    print("Warning!\nCould not resolve origin file path from the dgindex input!")
+    return dgiFile
+
+from ..util import src_file
 
 def parse_src_file(src: src_file, _print: bool = False) -> list[Chapter]:
     stream_dir = src.file.resolve().parent

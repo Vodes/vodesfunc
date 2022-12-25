@@ -4,6 +4,7 @@ from functools import partial
 from typing import Callable
 from pathlib import Path
 from .types import PathLike, Trim
+from .auto.parsing import parse_m2ts_path
 import os
 import binascii
 
@@ -48,6 +49,9 @@ class src_file:
                     self.src_cut = self.src[:trim_end]
         else:
             self.src_cut = self.src
+
+        if self.file.suffix.lower() == '.dgi' and self.file.with_suffix('.m2ts'):
+            self.file = parse_m2ts_path(self.file)
 
 SRC_FILE = src_file
 
@@ -180,7 +184,6 @@ def get_crc32(file: PathLike) -> str:
     buf = open(file, 'rb').read()
     buf = (binascii.crc32(buf) & 0xFFFFFFFF)
     return "%08X" % buf
-
 
 out = set_output
 out_src = set_output_source
