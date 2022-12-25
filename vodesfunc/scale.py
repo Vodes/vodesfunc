@@ -11,8 +11,9 @@ core = vs.core
 
 __all__: list[str] = [
     'NNEDI_Doubler',
+    'Clamped_Doubler',
+    'Shader_Doubler',
     'Waifu2x_Doubler',
-    'Shader_Doubler', 'Clamped_Doubler',
     'vodes_rescale',
 ]
 
@@ -86,8 +87,7 @@ class Shader_Doubler(Doubler):
         return depth(doubled_y, get_depth(clip))
 
 class Waifu2x_Doubler(Doubler):
-    from vsmlrt import Backend
-    backend: Backend
+    backend: any
     kwargs: dict[str, Any]
 
     def __init__(self, cuda: bool | str = 'trt', fp16: bool = True, num_streams: int = 1, **kwargs) -> None:
