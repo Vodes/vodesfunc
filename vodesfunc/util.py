@@ -50,8 +50,11 @@ class src_file:
         else:
             self.src_cut = self.src
 
-        if self.file.suffix.lower() == '.dgi' and self.file.with_suffix('.m2ts'):
-            self.file = parse_m2ts_path(self.file)
+        if self.file.suffix.lower() == '.dgi':
+            if self.file.with_suffix('.m2ts').exists():
+                self.file = self.file.with_suffix('.m2ts')
+            else:
+                self.file = parse_m2ts_path(self.file)
 
 SRC_FILE = src_file
 
