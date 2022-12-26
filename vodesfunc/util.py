@@ -3,7 +3,7 @@ import vapoursynth as vs
 from functools import partial
 from typing import Callable
 from pathlib import Path
-from .types import PathLike, Trim
+from .types import PathLike, Trim, Zone
 from .auto.parsing import parse_m2ts_path
 import os
 import binascii
@@ -187,6 +187,14 @@ def get_crc32(file: PathLike) -> str:
     buf = open(file, 'rb').read()
     buf = (binascii.crc32(buf) & 0xFFFFFFFF)
     return "%08X" % buf
+
+def is_x264_zone(zone: Zone) -> bool:
+    if isinstance(zone[2], str):
+        if len(zone) < 4:
+            raise ValueError(f"Zone {zone} is invalid.")
+        return True
+    else:
+        return False
 
 out = set_output
 out_src = set_output_source

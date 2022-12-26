@@ -15,7 +15,7 @@ from .auto.download import get_executable
 from .auto.convert import timedelta_to_frame, frame_to_timedelta, format_timedelta
 from .auto.parsing import parse_ogm, parse_xml, parse_src_file
 from .types import PathLike, Trim, Zone, Chapter, TrackType
-from .util import src_file, uniquify_path, get_crc32
+from .util import src_file, uniquify_path, get_crc32, is_x264_zone
 
 global setup
 setup = None
@@ -115,8 +115,13 @@ class Setup:
         if codec.lower() in ['x265', 'x264']:
             if zones:
                 zones_settings: str = ''
-                for i, ((start, end, multiplier)) in enumerate(zones):
-                    zones_settings += f'{start},{end},b={multiplier}'
+                for i, zone in enumerate(zones):
+                    if is_x264_zone(zone):
+                        if codec.lower() == 'x265' and zone[2].lower() != 'q':
+                            raise ValueError(f"Zone '{zone}' is invalid for x265. Please only use b or q.")
+                        zones_settings += f'{zone[0]},{zone[1]},{zone[2]}={zone[3]}'
+                    else:
+                        zones_settings += f'{zone[0]},{zone[1]},b={zone[2]}'
                     if i != len(zones) - 1:
                         zones_settings += '/'
                 args += f' --zones {zones_settings}'
