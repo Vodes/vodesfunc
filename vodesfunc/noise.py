@@ -2,14 +2,16 @@ import vapoursynth as vs
 core = vs.core
 
 from typing import Sequence
-from vstools import get_depth, scale_value, split, normalize_seq, get_neutral_value, get_peak_value
+from vstools import get_depth, scale_value, split, normalize_seq, get_neutral_value, get_peak_value, mod4
+from vskernels import Scaler, Lanczos, BicubicDidee
 
 __all__ = [
     'adaptive_grain', 'grain'
 ]
 
 def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5], size: float | list[float] = 3, 
-    type: int = 3, static: bool = False, temporal_average: int = 25, luma_scaling = 6, seed: int = -1, temporal_radius: int = 3,
+    type: int = 3, static: bool = False, temporal_average: int = 25, luma_scaling: float = 6, seed: int = -1, temporal_radius: int = 3,
+    scale: float = 1, scaler: Scaler = Lanczos(),
     fade_edges: bool = True, tv_range: bool = True, lo: int | Sequence[int] | None = None, hi: int | Sequence[int] | None = None,
     protect_neutral: bool = True, **kwargs) -> vs.VideoNode:
 
@@ -19,10 +21,18 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
 
         :param clip:                Input clip.
         :param strength:            Grainer strength. Use a list to specify [luma, chroma] graining.
-                                    Default chroma grain is luma / 2.
+                                    Default chroma grain is luma / 5.
         :param size:                Grain size. Will be passed as xsize and ysize. Can be adjusted individually with a list.
-        :param type:                See vs-noise github for 0-3. Type 4 is type 2 on a higher res clip and downscaled
+                                    This should not be confused with the resizing of adptvgrnMod. For something similar, use the `scale` param.
+        :param type:                See vs-noise github for 0-3. Type 4 is type 2 with a 0.7 scale and using BicubicDidee as the scaler.
         :param static:              Static or dynamic grain.
+        :param seed:                Grain seed for the grainer.
+        :param temporal_average:    Reference frame weighting for temporal softening and grain consistency.
+        :param temporal_radius:     How many frames the averaging will use.
+        :param scale:               Makes the grain bigger if > 1 and smaller if < 1 by graining a different sized blankclip and scaling to clip res after.
+                                    Can be used to tweak sharpness/frequency considering vs-noise always keeps those the same no matter the size.
+        :param scaler:              Scaler/Kernel used for down- or upscaling the grained blankclip.
+
         :param fade_edges:          Keeps grain from exceeding legal range.
                                     With this, values whiclip.height go towards the neutral point, but would generate
                                     illegal values if they pointed in the other direction are also limited.
@@ -31,16 +41,19 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
         :param lo:                  Overwrite legal range's minimums. Value is scaled from 8-bit to clip depth.
         :param hi:                  Overwrite legal range's maximums. Value is scaled from 8-bit to clip depth.
         :param protect_neutral:     Disable chroma grain on neutral chroma.
-        :param seed:                Grain seed for the grainer.
-        :param temporal_average:    Reference frame weighting for temporal softening and grain consistency.
-        :param temporal_radius:     How many frames the averaging will use.
         :param kwargs:              Kwargs passed to the grainer.
         
         :returns: Grained clip.
     """
     
-    strength = strength if isinstance(strength, list) else [strength, 0.5 * strength]
+    strength = strength if isinstance(strength, list) else [strength, 0.2 * strength]
     size = size if isinstance(size, list) else [size, size]
+
+    if type > 4 or type < 0:
+        raise ValueError('adaptive_grain: Type has to be a number between 0 and 4')
+
+    if scale >= 2:
+        raise ValueError('adaptive_grain: Scale has to be a number below 2. (Default is 1, to disable scaling)')
 
     mask = core.adg.Mask(clip.std.PlaneStats(), luma_scaling)
     ogdepth = get_depth(clip)
@@ -56,16 +69,21 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
         length = clip.num_frames
 
     if type == 4:
-        from vskernels import BicubicDidee
-        blank = clip.std.BlankClip(clip.width * 1.3, clip.height * 1.3, length=length, color=normalize_seq(neutral, clip.format.num_planes))
-        grained = blank.noise.Add(strength[0], strength[1], type=2, xsize=size[0] * 0.9, ysize=size[1] * 0.9, seed=seed, constant=static, **kwargs)
-        grained = BicubicDidee().scale(grained, clip.width, clip.height)
-    elif type > 4 or type < 0:
-        raise ValueError('adaptive_grain: Type has to be a number between 0 and 4')
-    else: 
-        blank = clip.std.BlankClip(clip.width, clip.height, length=length, color=normalize_seq(neutral, clip.format.num_planes))
-        grained = blank.noise.Add(strength[0], strength[1], type=type, xsize=size[0], ysize=size[1], seed=seed, constant=static, **kwargs)
-    
+        scale = 0.7
+        scaler = BicubicDidee()
+        type = 2
+
+    width = clip.width - (clip.width * scale - clip.width)
+    height = clip.height - (clip.height * scale - clip.height)
+
+    if scale != 1:
+        width = mod4(width)
+        height = mod4(height)
+
+    blank = clip.std.BlankClip(width, height, length=length, color=normalize_seq(neutral, clip.format.num_planes))
+    grained = blank.noise.Add(strength[0], strength[1], type=type, xsize=size[0], ysize=size[1], seed=seed, constant=static, **kwargs)
+    grained = scaler.scale(grained, clip.width, clip.height)
+
     if not static and temporal_average > 0:
         cut = (temporal_radius - 1) // 2
         grained = core.std.Merge(grained, core.std.AverageFrames(grained, weights=[1] * temporal_radius), weight=temporal_average / 100)
