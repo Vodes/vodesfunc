@@ -6,8 +6,10 @@ from vstools import get_depth, scale_value, split, normalize_seq, get_neutral_va
 from vskernels import Scaler, Lanczos, BicubicDidee
 
 __all__ = [
-    'adaptive_grain', 'grain'
+    'adaptive_grain', 'grain', 'ntype4'
 ]
+
+ntype4 = {"type": 2, "scale": 0.7, "scaler": BicubicDidee()}
 
 def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5], size: float | list[float] = 3, 
     type: int = 3, static: bool = False, temporal_average: int = 25, luma_scaling: float = 6, seed: int = -1, temporal_radius: int = 3,
