@@ -68,11 +68,6 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
     else:
         length = clip.num_frames
 
-    if type == 4:
-        scale = 0.7
-        scaler = BicubicDidee()
-        type = 2
-
     width = clip.width - (clip.width * scale - clip.width)
     height = clip.height - (clip.height * scale - clip.height)
 
