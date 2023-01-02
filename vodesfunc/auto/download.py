@@ -27,7 +27,7 @@ types: dict = {
 def get_executable(type: str, can_download: bool = True) -> str:
     path = sh.which(type)
     if path is None:
-        if not can_download:
+        if not can_download or can_download == False:
             raise Exception(f"{type.upper()} executable not found in path!")
         else:
             path = download_binary(type.lower())
