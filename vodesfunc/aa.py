@@ -29,7 +29,8 @@ def pre_aa(clip: vs.VideoNode, radius: int = 1, strength: float = 100, opencl: b
         clip_y = clip_y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
 
     for i in range(2):
-        bob = clip_y.znedi3.nnedi3(field=3, **nnedi3_args)
+        bob = clip_y.nnedi3cl.NNEDI3CL(field=3, **nnedi3_args) if opencl else \
+            clip_y.znedi3.nnedi3(field=3, **nnedi3_args)
         sharp = unsharp_masked(clip_y, radius, strength)
         limit = core.std.Expr([sharp, clip_y, bob[::2], bob[1::2]], "x y z a max max min y z a min min max")
         clip_y = limit.std.Transpose()
