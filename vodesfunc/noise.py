@@ -31,6 +31,8 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
         :param seed:                Grain seed for the grainer.
         :param temporal_average:    Reference frame weighting for temporal softening and grain consistency.
         :param temporal_radius:     How many frames the averaging will use.
+        :param luma_scaling:        Luma scaling passed to the adaptivegrain mask. While use the absolute value on an inverted clip if a negative number is passed.
+                                    Mainly useful for graining the bright parts of an image.
         :param scale:               Makes the grain bigger if > 1 and smaller if < 1 by graining a different sized blankclip and scaling to clip res after.
                                     Can be used to tweak sharpness/frequency considering vs-noise always keeps those the same no matter the size.
         :param scaler:              Scaler/Kernel used for down- or upscaling the grained blankclip.
@@ -57,7 +59,7 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
     if scale >= 2:
         raise ValueError('adaptive_grain: Scale has to be a number below 2. (Default is 1, to disable scaling)')
 
-    mask = core.adg.Mask(clip.std.PlaneStats(), luma_scaling)
+    mask = core.adg.Mask(clip.std.PlaneStats() if luma_scaling >= 0 else clip.std.Invert().std.PlaneStats(), abs(luma_scaling))
     ogdepth = get_depth(clip)
 
     def scale_val8x(value: int, chroma: bool = False) -> float:
