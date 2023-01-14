@@ -57,7 +57,7 @@ class Setup:
 
         if config_file:
             config = ConfigParser()
-            config_name = 'config.ini'
+            config_name = config_file
 
             if not os.path.exists(config_name):
                 config['SETUP'] = {
