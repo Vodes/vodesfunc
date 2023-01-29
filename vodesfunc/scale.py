@@ -1,10 +1,11 @@
 from typing import Any, Callable
 
 import vapoursynth as vs
-from vskernels import Catrom, Kernel
+from vskernels import Catrom, Kernel, Scaler
 from vstools import depth, get_depth, get_y, iterate, ColorRange, Matrix
 from .types import PathLike
 from abc import ABC, abstractmethod
+from math import floor
 
 core = vs.core
 
@@ -203,10 +204,10 @@ class Clamped_Doubler(Doubler):
 def vodes_rescale(
     src: vs.VideoNode, height: float = 0,
     descale_kernel: Kernel | list[vs.VideoNode] = Catrom(),
-    doubler: Kernel | Callable[[vs.VideoNode], vs.VideoNode] | Doubler = NNEDI_Doubler(),
-    downscaler: Kernel | str = Catrom(),
+    doubler: Kernel | Scaler | Callable[[vs.VideoNode], vs.VideoNode] | Doubler = NNEDI_Doubler(),
+    downscaler: Kernel | Scaler | str = Catrom(),
     line_mask: vs.VideoNode | bool = None, credit_mask: vs.VideoNode = None, mask_threshold: float = 0.04,
-    width: float = None, do_post_double: Callable[[vs.VideoNode], vs.VideoNode] = None
+    width: float = None, base_height: float = None, do_post_double: Callable[[vs.VideoNode], vs.VideoNode] = None
 ) -> list[vs.VideoNode | None]:
     """
     Rescale function with masking for convenience etc.
@@ -214,6 +215,7 @@ def vodes_rescale(
     :param src:             Input clip
     :param height:          Height to be descaled to
     :param width:           Width to be descaled to; will be calculated if you don't pass any
+    :param base_height:     Used for fractional descales
     :param doubler:         A callable or kernel or Doubler class that will be used to upscale
     :param descale_kernel:  Kernel used for descaling, supports passing a list of descaled and ref clip instead
     :param downscaler:      Kernel used to downscale the doubled clip, uses vsscale.ssim_downsample if passed 'ssim'
@@ -230,17 +232,44 @@ def vodes_rescale(
     if height is None or height < 1:
         raise ValueError('Rescale: Height may not be None or 0')
 
+    height = float(height)
+
     if width is None or width < 1:
         aspect_ratio = src.width / src.height
         width = height * aspect_ratio
 
-    descaled_y = descale_kernel.descale(y, width, height) if isinstance(descale_kernel, Kernel) else descale_kernel[0]
-    ref_y = descale_kernel.scale(descaled_y, src.width, src.height) if isinstance(
-        descale_kernel, Kernel) else descale_kernel[1]
+    if not height.is_integer() and base_height is None:
+        raise ValueError("Rescale: height cannot be fractional if you don't pass a base_height")
+
+    if base_height is not None:
+        base_height = float(base_height)
+        if not base_height.is_integer():
+            raise ValueError("Rescale: Your base_height has to be an integer.")
+        if base_height < height:
+            raise ValueError("Rescale: Your base_height has to be bigger than your height.")
+        if (base_height % 2) != 0:
+            raise ValueError("Rescale: Weird things happen when your base_height isn't an even number")
+        
+        src_width = height * clip.width / clip.height
+        cropped_width = clip.width - 2 * floor((clip.width - src_width) / 2)
+        cropped_height = base_height - 2 * floor((base_height - height) / 2)
+        fractional_args = dict(height = cropped_height, width = cropped_width, 
+            src_width = src_width, src_height = height, src_left = (cropped_width - src_width) / 2,
+            src_top = (cropped_height - height) / 2)
+        
+        descaled_y = descale_kernel.descale(y, **fractional_args)
+        fractional_args.pop('width')
+        fractional_args.pop('height')
+        base_height_desc = descale_kernel.descale(y, base_height * (src.width / src.height), base_height)
+        ref_y = descale_kernel.scale(base_height_desc, src.width, src.height)
+    else:
+        descaled_y = descale_kernel.descale(y, width, height) if isinstance(descale_kernel, Kernel) else descale_kernel[0]
+        ref_y = descale_kernel.scale(descaled_y, src.width, src.height) if isinstance(
+            descale_kernel, Kernel) else descale_kernel[1]
 
     if isinstance(doubler, Doubler):
         doubled_y = doubler.double(descaled_y)
-    elif isinstance(doubler, Kernel):
+    elif isinstance(doubler, Kernel) or isinstance(doubler, Scaler):
         doubled_y = doubler.scale(descaled_y, descaled_y.width * 2, descaled_y.height * 2)
     else: 
         doubled_y = doubler(descaled_y)
@@ -248,12 +277,23 @@ def vodes_rescale(
     if do_post_double is not None:
         doubled_y = do_post_double(doubled_y)
 
+    from vsscale import ssim_downsample, SSIM
+    ssim_msg = "Rescale: SSIM does not take src_height and src_width params.\nPlease use something else until setsu fixes it :)"
+
     if isinstance(downscaler, str) and downscaler.lower() == 'ssim':
-        import vsscale as vss
-        rescaled_y = vss.ssim_downsample(depth(doubled_y, 16), src.width, src.height)
+        if base_height is not None:
+            raise ValueError(ssim_msg)
+        rescaled_y = ssim_downsample(depth(doubled_y, 16), src.width, src.height)
         rescaled_y = depth(rescaled_y, wdepth)
     else:
-        rescaled_y = downscaler.scale(doubled_y, src.width, src.height)
+        if base_height is not None:
+            if isinstance(downscaler, SSIM):
+                raise ValueError(ssim_msg)
+            
+            fractional_args.update({key: value * 2 for (key, value) in fractional_args.items()})
+            rescaled_y = downscaler.scale(doubled_y, src.width, src.height, **fractional_args)
+        else:
+            rescaled_y = downscaler.scale(doubled_y, src.width, src.height)
 
     if credit_mask is None and mask_threshold > 0:
         credit_mask = core.std.Expr([depth(y, 32), depth(ref_y, 32)], f"x y - abs {mask_threshold} < 0 1 ?")
