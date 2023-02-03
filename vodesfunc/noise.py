@@ -1,7 +1,7 @@
 import vapoursynth as vs
 core = vs.core
 
-from typing import Sequence
+from typing import Sequence, Callable
 from vstools import get_depth, scale_value, split, normalize_seq, get_neutral_value, get_peak_value, mod4
 from vskernels import Scaler, Lanczos, BicubicDidee
 
@@ -13,7 +13,7 @@ ntype4 = {"type": 2, "scale": 0.7, "scaler": BicubicDidee()}
 
 def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5], size: float | list[float] = 3, 
     type: int = 3, static: bool = False, temporal_average: int = 25, luma_scaling: float = 6, seed: int = -1, temporal_radius: int = 3,
-    scale: float = 1, scaler: Scaler = Lanczos(),
+    scale: float = 1, scaler: Scaler = Lanczos(), post_grain: Callable[[vs.VideoNode], vs.VideoNode] | None = None,
     fade_edges: bool = True, tv_range: bool = True, lo: int | Sequence[int] | None = None, hi: int | Sequence[int] | None = None,
     protect_neutral: bool = True, **kwargs) -> vs.VideoNode:
 
@@ -36,6 +36,7 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
         :param scale:               Makes the grain bigger if > 1 and smaller if < 1 by graining a different sized blankclip and scaling to clip res after.
                                     Can be used to tweak sharpness/frequency considering vs-noise always keeps those the same no matter the size.
         :param scaler:              Scaler/Kernel used for down- or upscaling the grained blankclip.
+        :param post_grain:          A callable function to run on the grained blankclip pre scaling. An example use would be to sharpen like I did for something.
 
         :param fade_edges:          Keeps grain from exceeding legal range.
                                     With this, values whiclip.height go towards the neutral point, but would generate
@@ -81,6 +82,10 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
 
     blank = clip.std.BlankClip(width, height, length=length, color=normalize_seq(neutral, clip.format.num_planes))
     grained = blank.noise.Add(strength[0], strength[1], type=type, xsize=size[0], ysize=size[1], seed=seed, constant=static, **kwargs)
+
+    if callable(post_grain):
+        grained = post_grain(grained)
+
     grained = scaler.scale(grained, clip.width, clip.height)
 
     if not static and temporal_average > 0:
