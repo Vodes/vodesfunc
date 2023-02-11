@@ -405,42 +405,38 @@ try:
 except Exception:
     _HOME = Path(os.devnull)
 
-LinuxFontDirs = [
-    # old x11 dirs
-    "/usr/X11R6/lib/X11/fonts/TTF/",
-    "/usr/X11/lib/X11/fonts",
-    # New standard loc apparently?
-    "/usr/share/fonts/",
-    # Kinda user
-    "/usr/local/share/fonts/",
-    # User
-    os.path.join(os.environ.get('XDG_DATA_HOME') or os.path.join(_HOME, ".local", "share"), "fonts"),
-    os.path.join(_HOME, ".fonts"),
-]
-
-OSxFontDirs = [
-    # System
-    "/Library/Fonts/",
-    "/Network/Library/Fonts/",
-    "/System/Library/Fonts/",
-    "/opt/local/share/fonts",
-    # User
-    os.path.join(_HOME, "Library", "Fonts"),
-]
-
-WinFontDirs = [
-    # System
-    os.path.join(os.environ['WINDIR'], "Fonts"),
-    # User
-    os.path.join(os.getenv("LOCALAPPDATA"), "Microsoft", "Windows", "Fonts")
-]
-
-
 def getFontDirs() -> list[str]:
     if sys.platform == 'win32':
-        fontpaths = WinFontDirs
+        fontpaths = [
+            # System
+            os.path.join(os.environ['WINDIR'], "Fonts"),
+            # User
+            os.path.join(os.getenv("LOCALAPPDATA"), "Microsoft", "Windows", "Fonts")
+        ]
     else:
+        LinuxFontDirs = [
+            # old x11 dirs
+            "/usr/X11R6/lib/X11/fonts/TTF/",
+            "/usr/X11/lib/X11/fonts",
+            # New standard loc apparently?
+            "/usr/share/fonts/",
+            # Kinda user
+            "/usr/local/share/fonts/",
+            # User
+            os.path.join(os.environ.get('XDG_DATA_HOME') or os.path.join(_HOME, ".local", "share"), "fonts"),
+            os.path.join(_HOME, ".fonts"),
+        ]
+
         if sys.platform == 'darwin':
+            OSxFontDirs = [
+                # System
+                "/Library/Fonts/",
+                "/Network/Library/Fonts/",
+                "/System/Library/Fonts/",
+                "/opt/local/share/fonts",
+                # User
+                os.path.join(_HOME, "Library", "Fonts"),
+            ]
             fontpaths = [*LinuxFontDirs, *OSxFontDirs]
         else:
             fontpaths = LinuxFontDirs
