@@ -463,6 +463,8 @@ def validate_and_save_fonts(ass_doc: tuple[str, ass.Document], out_dir: str | Pa
 
     for additional_fonts in fontdirs:
         path = Path(additional_fonts)
+        if not path.exists():
+            continue
         if path.is_dir():
             fontlist.extend((p.name, str(p)) for p in path.rglob(
                 '*') if p.is_file() and p.suffix.lower() in ('.otf', '.ttf'))
