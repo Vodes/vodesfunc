@@ -207,23 +207,25 @@ def vodes_rescale(
     doubler: Kernel | Scaler | Callable[[vs.VideoNode], vs.VideoNode] | Doubler = NNEDI_Doubler(),
     downscaler: Kernel | Scaler | str = Catrom(),
     line_mask: vs.VideoNode | bool = None, credit_mask: vs.VideoNode = None, mask_threshold: float = 0.04,
-    width: float = None, base_height: float = None, do_post_double: Callable[[vs.VideoNode], vs.VideoNode] = None
+    use_baseheight_mask: bool = False, width: float = None, base_height: float = None,
+    do_post_double: Callable[[vs.VideoNode], vs.VideoNode] = None
 ) -> list[vs.VideoNode | None]:
     """
     Rescale function with masking for convenience etc.
 
-    :param src:             Input clip
-    :param height:          Height to be descaled to
-    :param width:           Width to be descaled to; will be calculated if you don't pass any
-    :param base_height:     Used for fractional descales
-    :param doubler:         A callable or kernel or Doubler class that will be used to upscale
-    :param descale_kernel:  Kernel used for descaling, supports passing a list of descaled and ref clip instead
-    :param downscaler:      Kernel used to downscale the doubled clip, uses vsscale.ssim_downsample if passed 'ssim'
-    :param line_mask:       Linemask to only rescale lineart | Will generate one if None or skip masking if `False` is passed
-    :param credit_mask:     Credit Masking | Will generate one if None or skip masking if *mask_threshold* is <= 0
-    :param mask_threshold:  Threshold for the diff based credit mask | lower catches more
-    :param do_post_double:  Pass your own function as a lambda if you want to manipulate the clip before the downscale happens
-    :return:                List of rescaled, reference upscale, credit mask and line mask
+    :param src:                 Input clip
+    :param height:              Height to be descaled to
+    :param width:               Width to be descaled to; will be calculated if you don't pass any
+    :param base_height:         Used for fractional descales
+    :param doubler:             A callable or kernel or Doubler class that will be used to upscale
+    :param descale_kernel:      Kernel used for descaling, supports passing a list of descaled and ref clip instead
+    :param downscaler:          Kernel used to downscale the doubled clip, uses vsscale.ssim_downsample if passed 'ssim'
+    :param line_mask:           Linemask to only rescale lineart | Will generate one if None or skip masking if `False` is passed
+    :param credit_mask:         Credit Masking | Will generate one if None or skip masking if *mask_threshold* is <= 0
+    :param mask_threshold:      Threshold for the diff based credit mask | lower catches more
+    :param use_baseheight_mask: Uses baseheight for ref descale for the automatic credit mask
+    :param do_post_double:      Pass your own function as a lambda if you want to manipulate the clip before the downscale happens
+    :return:                    List of rescaled, reference upscale, credit mask and line mask
     """
     wdepth = 16 if get_depth(src) < 16 else get_depth(src)
     clip = depth(src, wdepth)
@@ -260,8 +262,11 @@ def vodes_rescale(
         descaled_y = descale_kernel.descale(y, **fractional_args)
         fractional_args.pop('width')
         fractional_args.pop('height')
-        base_height_desc = descale_kernel.descale(y, base_height * (src.width / src.height), base_height)
-        ref_y = descale_kernel.scale(base_height_desc, src.width, src.height)
+        if use_baseheight_mask:
+            base_height_desc = descale_kernel.descale(y, base_height * (src.width / src.height), base_height)
+            ref_y = descale_kernel.scale(base_height_desc, src.width, src.height)
+        else:
+            ref_y = descale_kernel.scale(descaled_y, src.width, src.height, **fractional_args)
     else:
         descaled_y = descale_kernel.descale(y, width, height) if isinstance(descale_kernel, Kernel) else descale_kernel[0]
         ref_y = descale_kernel.scale(descaled_y, src.width, src.height) if isinstance(
