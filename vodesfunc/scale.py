@@ -207,7 +207,7 @@ def vodes_rescale(
     doubler: Kernel | Scaler | Callable[[vs.VideoNode], vs.VideoNode] | Doubler = NNEDI_Doubler(),
     downscaler: Kernel | Scaler | str = Catrom(),
     line_mask: vs.VideoNode | bool = None, credit_mask: vs.VideoNode = None, mask_threshold: float = 0.04,
-    use_baseheight_mask: bool = False, width: float = None, base_height: float = None,
+    use_baseheight_mask: bool = False, width: float = None, base_height: float = None, base_width: float = None,
     do_post_double: Callable[[vs.VideoNode], vs.VideoNode] = None
 ) -> list[vs.VideoNode | None]:
     """
@@ -217,6 +217,7 @@ def vodes_rescale(
     :param height:              Height to be descaled to
     :param width:               Width to be descaled to; will be calculated if you don't pass any
     :param base_height:         Used for fractional descales
+    :param base_width:          Used for fractional descales
     :param doubler:             A callable or kernel or Doubler class that will be used to upscale
     :param descale_kernel:      Kernel used for descaling, supports passing a list of descaled and ref clip instead
     :param downscaler:          Kernel used to downscale the doubled clip, uses vsscale.ssim_downsample if passed 'ssim'
@@ -249,11 +250,13 @@ def vodes_rescale(
             raise ValueError("Rescale: Your base_height has to be an integer.")
         if base_height < height:
             raise ValueError("Rescale: Your base_height has to be bigger than your height.")
-        if (base_height % 2) != 0:
-            raise ValueError("Rescale: Weird things happen when your base_height isn't an even number")
+        #if (base_height % 2) != 0:
+        #    raise ValueError("Rescale: Weird things happen when your base_height isn't an even number")
         
         src_width = height * clip.width / clip.height
-        cropped_width = clip.width - 2 * floor((clip.width - src_width) / 2)
+        if not base_width:
+            base_width = clip.width
+        cropped_width = base_width - 2 * floor((base_width - src_width) / 2)
         cropped_height = base_height - 2 * floor((base_height - height) / 2)
         fractional_args = dict(height = cropped_height, width = cropped_width, 
             src_width = src_width, src_height = height, src_left = (cropped_width - src_width) / 2,
