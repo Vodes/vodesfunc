@@ -3,6 +3,7 @@ from typing import Any, Callable
 import vapoursynth as vs
 from vskernels import Catrom, Kernel, Scaler
 from vstools import depth, get_depth, get_y, iterate, ColorRange, Matrix
+from vsrgtools.sharp import unsharp_masked
 from .types import PathLike
 from abc import ABC, abstractmethod
 from math import floor
@@ -179,11 +180,7 @@ class Clamped_Doubler(Doubler):
             elif isinstance(self.sharpen_smooth, Callable):
                 sharpened_smooth = self.sharpen_smooth(smooth)
             elif self.sharpen_smooth == True:
-                try:
-                    import vardefunc as vdf
-                    sharpened_smooth = vdf.sharp.z4usm(smooth, radius, strength)
-                except:
-                    raise "Clamped_Doubler: Couldn't import vardefunc. Please use a different sharpener or none at all."
+                sharpened_smooth = unsharp_masked(smooth, radius, strength)
             
             clamped = core.std.Expr([smooth, shader, sharpened_smooth], 'x y z min max y z max min')
             if self.ratio != 100:
