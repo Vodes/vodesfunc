@@ -77,9 +77,14 @@ class DescaleTarget(TargetVals):
                 self.width = get_w(self.height, clip)
             self.descale = self.kernel.descale(clip, self.width, self.height)
             self.rescale = self.kernel.scale(self.descale, clip.width, clip.height)
+            ref_y = self.rescale
         else:
             if self.base_height is None:
-                raise ValueError("DescaleTarget: height cannot be fractional if you don't pass a base_height")
+                raise ValueError("DescaleTarget: height cannot be fractional if you don't pass a base_height.")
+            if not float(self.base_height).is_integer():
+                raise ValueError("DescaleTarget: Your base_height has to be an integer.")
+            if self.base_height < self.height:
+                raise ValueError("DescaleTarget: Your base_height has to be bigger than your height.")
             self.frac_args = get_args(clip, self.base_height, self.height, self.base_width)
             self.descale = self.kernel.descale(clip, **self.frac_args)  \
                 .std.CopyFrameProps(clip).std.SetFrameProp('Descale', self.index + 1)
@@ -132,7 +137,6 @@ class DescaleTarget(TargetVals):
             Generates and returns the fully upscaled & masked & what not clip
         """
         if self.descale == None or self.rescale == None:
-            print('Generating new clips lol')
             self.generate_clips(clip)
 
         y = depth(get_y(clip), 16)
