@@ -62,7 +62,7 @@ class DescaleTarget(TargetVals):
     line_mask: vs.VideoNode | bool | None = None
     bbmod_masks: int | list[int] = 0 # Not actually implemented yet lol
 
-    def generate_clips(self, clip: vs.VideoNode):
+    def generate_clips(self, clip: vs.VideoNode) -> 'DescaleTarget':
         """
             Generates descaled and rescaled clips of the given input clip
 
@@ -120,6 +120,8 @@ class DescaleTarget(TargetVals):
                 self.credit_mask = iterate(self.credit_mask, core.std.Inflate, 2 if self.do_post_double is None else 4)
             
             self.credit_mask = depth(self.credit_mask, 16)
+        
+        return self
     
     def get_diff(self, clip: vs.VideoNode) -> vs.VideoNode:
         """
