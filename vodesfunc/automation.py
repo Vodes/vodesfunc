@@ -553,6 +553,7 @@ class Mux():
         """
         filename = re.sub(r'\$show\$', setup.show_name, setup.out_name)
         filename = re.sub(r'\$ep\$', setup.episode, filename)
+        filename = re.sub(r'\$crc32\$', "#crc32#", filename)
 
         mkvtitle = re.sub(r'\$show\$', setup.show_name, setup.mkv_title_naming)
         mkvtitle = re.sub(r'\$ep\$', setup.episode, mkvtitle)
@@ -592,14 +593,14 @@ class Mux():
         print("Muxing episode...")
         if print_command:
             print(f'\n\n{self.commandline}\n\n')
-        code = subprocess.Popen(self.commandline).wait()
+        code = run_commandline(self.commandline, False)
         if self.setup.clean_work_dirs == True and code == 0:
             sh.rmtree(self.setup.work_dir)
         print("Done.")
         absolute = str(self.outfile.resolve())
-        if r'$crc32$' in absolute:
+        if r'#crc32#' in absolute:
             print("Generating CRC32 for muxed file...")
-            self.outfile = self.outfile.rename(re.sub(r'\$crc32\$', get_crc32(self.outfile), absolute))
+            self.outfile = self.outfile.rename(re.sub(r'#crc32#', get_crc32(self.outfile), absolute))
             print("Done.")
         return str(self.outfile.resolve())
 
@@ -610,7 +611,7 @@ def settings_builder_x265(
         rect: bool = True, amp: bool = False, chroma_qpoffsets: int = -2, tu_intra_depth: int = 2,
         tu_inter_depth: int = 2, rskip: bool | int = 0, tskip: bool = False, ref: int = 4, bframes: int = 16,
         cutree: bool = False, rc_lookahead: int = 60, subme: int = 5, me: int = 3, b_intra: bool = True,
-        weightb: bool = True, deblock: list[int] | str = [-2, -2], sar: int = 1, append: str = "") -> str:
+        weightb: bool = True, deblock: list[int] | str = [-2, -2], sar: int | str = 1, append: str = "") -> str:
 
     # Simple insert values
     settings = f" --preset {preset} --crf {crf} --bframes {bframes} --ref {ref} --rc-lookahead {rc_lookahead} --subme {subme} --me {me}"
@@ -668,7 +669,7 @@ def should_create_again(file: str | Path, min_bytes: int = 10000) -> bool:
     else:
         return False
 
-def run_commandline(command: str, quiet: bool = True, shell: bool = False):
+def run_commandline(command: str, quiet: bool = True, shell: bool = False) -> int:
     if os.name != 'nt':
         shell = True
     if quiet:
@@ -676,7 +677,7 @@ def run_commandline(command: str, quiet: bool = True, shell: bool = False):
     else:
         p = subprocess.Popen(command, shell=shell)
     
-    p.wait()
+    return p.wait()
 
 sb = settings_builder_x265
 sb265 = sb
