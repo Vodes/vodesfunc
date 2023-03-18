@@ -189,7 +189,7 @@ class SubTrack(_track):
             with open(out_file, 'w', encoding='utf_8_sig') as merge_write:
                 merged.dump_file(merge_write)
 
-            file = out_file
+            file = Path(out_file)
             print('Done.\n')
 
         super().__init__(file, TrackType.SUB, name, lang, default, forced, delay)
@@ -270,7 +270,7 @@ class SubTrack(_track):
             events.append(line)
         
         doc.events = events
-        out_file = Path(os.path.join(get_workdir(), self.file.stem + "-swapped.ass"))
+        out_file = Path(os.path.join(get_workdir(), Path(self.file).stem + "-swapped.ass"))
         with open(out_file, 'w', encoding='utf_8_sig') as f:
             doc.dump_file(f)
         
@@ -347,11 +347,11 @@ class SubTrack(_track):
                 doc.styles.append(style)
 
             doc.events = events
-            out_file = uniquify_path(Path(os.path.join(get_workdir(), self.file.stem + "-merge.ass")))
+            out_file = uniquify_path(Path(os.path.join(get_workdir(), Path(self.file).stem + "-merge.ass")))
             with open(out_file, 'w', encoding='utf_8_sig') as f:
                 doc.dump_file(f)
 
-            self.file = out_file
+            self.file = Path(out_file)
         else:
             print(f'Syncpoint "{syncpoint}" was not found!')
 
