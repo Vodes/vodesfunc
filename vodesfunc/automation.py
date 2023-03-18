@@ -159,7 +159,10 @@ class Setup:
             print(f'\nxEncoder Command:\n{encoder_command}\n')
 
         print(f"Encoding episode {self.episode} to {codec}...")
-        process = subprocess.Popen(encoder_command, stdin=subprocess.PIPE)
+        if os.name != 'nt':
+            process = subprocess.Popen(encoder_command, stdin=subprocess.PIPE, shell=True)
+        else:
+            process = subprocess.Popen(encoder_command, stdin=subprocess.PIPE, shell=False)
         clip.output(process.stdin, y4m=True, progress_update=lambda x, y: self._update_progress(x, y))
         process.communicate()
 
@@ -666,6 +669,8 @@ def should_create_again(file: str | Path, min_bytes: int = 10000) -> bool:
         return False
 
 def run_commandline(command: str, quiet: bool = True, shell: bool = False):
+    if os.name != 'nt':
+        shell = True
     if quiet:
         p = subprocess.Popen(command, stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=shell)
     else:
