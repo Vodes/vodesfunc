@@ -10,7 +10,7 @@ __all__ = ['DescaleTarget', 'MixedRescale', 'DT']
 
 def get_args(clip: vs.VideoNode, base_height: int, height: float, base_width: float = None):
     base_height = float(base_height)
-    src_width = get_w(height, clip)#height * clip.width / clip.height
+    src_width = height * clip.width / clip.height
     if not base_width:
         base_width = clip.width
     cropped_width = base_width - 2 * floor((base_width - src_width) / 2)
@@ -74,7 +74,7 @@ class DescaleTarget(TargetVals):
         self.height = float(self.height)
         if self.height.is_integer():
             if not self.width:
-                self.width = get_w(self.height, clip)
+                self.width = self.height * clip.width / clip.height
             self.descale = self.kernel.descale(clip, self.width, self.height)
             self.rescale = self.kernel.scale(self.descale, clip.width, clip.height)
             ref_y = self.rescale
