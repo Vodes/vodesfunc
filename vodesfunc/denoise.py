@@ -86,9 +86,10 @@ def schizo_denoise(src: vs.VideoNode, sigma: float | list[float] = [0.8, 0.3], t
     y = get_y(clip)
     mv = VMDegrain(y, thSAD, prefilter, **kwargs)
 
-    bm3dfunc = core.bm3dcpu
     if cuda:
         bm3dfunc = core.bm3dcuda if not hasattr(core, "bm3dcuda_rtc") else core.bm3dcuda_rtc
+    else:
+        bm3dfunc = core.bm3dcpu
 
     bm3d = bm3dfunc.BM3Dv2(depth(y, 32), depth(mv, 32), sigma[0], radius=radius[0], **bm3dargs)
 
