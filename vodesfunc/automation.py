@@ -82,6 +82,12 @@ class Setup:
             for key in settings:
                 setattr(self, key, settings[key])
 
+            if isinstance(self.allow_binary_download, str):
+                self.allow_binary_download = True if self.allow_binary_download.strip().lower() in ['true', 'yes'] else False
+                
+            if isinstance(self.clean_work_dirs, str):
+                self.clean_work_dirs = True if self.clean_work_dirs.strip().lower() in ['true', 'yes'] else False
+
         self.episode = episode
         self.work_dir = Path(os.path.join(os.getcwd(), "_workdir", episode))
         self.work_dir.mkdir(parents=True, exist_ok=True)
