@@ -35,7 +35,7 @@ def VMDegrain(src: vs.VideoNode, thSAD: int = 60, prefilter: vs.VideoNode | int 
 
 def schizo_denoise(src: vs.VideoNode, sigma: float | list[float] = [0.8, 0.3], thSAD: int = 60, 
     radius: int | list[int] = 2, nlm_a: int = 2, prefilter: vs.VideoNode | int = 2, 
-    cuda: bool = True, csharp: int | bool = False, **kwargs) -> vs.VideoNode:
+    cuda: bool | list[bool] = True, csharp: int | bool = False, **kwargs) -> vs.VideoNode:
     """
         Convenience function for (k)nlm on chroma and mvtools + bm3d(cuda) on luma.
         Mostly for personal scripts so please don't complain too much unless it's an actual issue.
@@ -63,13 +63,16 @@ def schizo_denoise(src: vs.VideoNode, sigma: float | list[float] = [0.8, 0.3], t
     if not isinstance(sigma, list):
         sigma = [sigma, sigma]
 
+    if not isinstance(cuda, list):
+        cuda = [cuda, cuda]
+
     if isinstance(prefilter, int):
         from vsdenoise import Prefilter
         prefilter = Prefilter(prefilter)
 
     clip = depth(src, 16)
 
-    nlmfunc = core.knlm.KNLMeansCL if not hasattr(core, "nlm_cuda") or not cuda else core.nlm_cuda.NLMeans
+    nlmfunc = core.knlm.KNLMeansCL if not hasattr(core, "nlm_cuda") or not cuda[0] else core.nlm_cuda.NLMeans
 
     if sigma.count == 3:
         clip_u = nlmfunc(clip, a=nlm_a, d=radius[1], h=sigma[1], channels='U')
@@ -86,9 +89,10 @@ def schizo_denoise(src: vs.VideoNode, sigma: float | list[float] = [0.8, 0.3], t
     y = get_y(clip)
     mv = VMDegrain(y, thSAD, prefilter, **kwargs)
 
-    if cuda:
+    if cuda[1]:
         bm3dfunc = core.bm3dcuda if not hasattr(core, "bm3dcuda_rtc") else core.bm3dcuda_rtc
     else:
+        bm3dargs.pop("fast")
         bm3dfunc = core.bm3dcpu
 
     bm3d = bm3dfunc.BM3Dv2(depth(y, 32), depth(mv, 32), sigma[0], radius=radius[0], **bm3dargs)

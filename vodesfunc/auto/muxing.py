@@ -278,7 +278,8 @@ class SubTrack(_track):
         return self
 
     def syncpoint_merge(self, syncpoint: str, mergefile: PathLike | GlobSearch, use_actor_field: bool = False, 
-        use_frames: bool = False, fps: Fraction = Fraction(24000, 1001), override_p1: int | timedelta = None) -> "SubTrack":
+        use_frames: bool = False, fps: Fraction = Fraction(24000, 1001), override_p1: int | timedelta = None, 
+        add_offset: int | timedelta = None, debug: bool = False) -> "SubTrack":
         """
             Merge other sub files (Opening/Ending kfx for example) with offsetting by syncpoints
 
@@ -306,6 +307,9 @@ class SubTrack(_track):
         tomerge = []
         existing_styles = [style.name for style in (doc.styles)]
 
+        if isinstance(add_offset, int) and not use_frames:
+            add_offset = frame_to_timedelta(add_offset, fps)
+
         for line in doc.events:
             events.append(line)
             if was_merged:
@@ -323,6 +327,9 @@ class SubTrack(_track):
                             offset = timedelta_to_frame(start - l.start, fps)
                         else:
                             offset = start - l.start
+
+                        if add_offset:
+                            offset += add_offset
                         break
 
                 for l in sorted(mergedoc.events, key = lambda event: event.start):
@@ -331,6 +338,10 @@ class SubTrack(_track):
                             offset = timedelta_to_frame(start - l.start, fps)
                         else:
                             offset = start - l.start
+
+                        if add_offset:
+                            offset += add_offset
+                            
                         l.start = start
                         l.end = (l.end + (frame_to_timedelta(offset, fps) if use_frames else offset))
                     else:
