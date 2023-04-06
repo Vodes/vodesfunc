@@ -136,7 +136,7 @@ class Clamped_Doubler(Doubler):
     sharp_doubler: Doubler
     sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode] = None
 
-    def __init__(self, sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode] = True, 
+    def __init__(self, sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode] = False, 
             sharp_doubler: Doubler | str = Shader_Doubler(), ratio: int = 100, **kwargs) -> None:
         """
             Simple utility class for doubling a clip using fsrcnnx / any shader clamped to nnedi.
