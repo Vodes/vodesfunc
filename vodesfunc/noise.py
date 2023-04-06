@@ -63,6 +63,11 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
     mask = core.adg.Mask(clip.std.PlaneStats() if luma_scaling >= 0 else clip.std.Invert().std.PlaneStats(), abs(luma_scaling))
     ogdepth = get_depth(clip)
 
+    # Type 4 depends on the input clip and as such should not be static, averaged or scaled
+    if type == 4:
+        grained = clip.noise.Add(strength[0], strength[1], type=type, xsize=size[0], ysize=size[1], constant=False, **kwargs)
+        return clip.std.MaskedMerge(grained, mask)
+
     def scale_val8x(value: int, chroma: bool = False) -> float:
         return scale_value(value, 8, ogdepth, scale_offsets=not tv_range, chroma=chroma)
 
