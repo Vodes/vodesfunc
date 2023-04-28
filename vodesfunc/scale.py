@@ -1,12 +1,9 @@
 from typing import Any, Callable
-
-import vapoursynth as vs
 from vskernels import Catrom, Kernel, Scaler
-from vstools import depth, get_depth, get_y, Matrix
+from vstools import vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version
 from vsrgtools.sharp import unsharp_masked
 from .types import PathLike
 from abc import ABC, abstractmethod
-core = vs.core
 
 
 __all__: list[str] = [
@@ -88,21 +85,73 @@ class Shader_Doubler(Doubler):
 
 class Waifu2x_Doubler(Doubler):
     backend: any
-    kwargs: dict[str, Any]
+    kwargs: KwargsT
+    w2xargs: KwargsT = {}
 
-    def __init__(self, cuda: bool | str = 'trt', fp16: bool = True, num_streams: int = 1, **kwargs) -> None:
+    def __init__(self, cuda: bool | str | None = None, fp16: bool = True, num_streams: int = 1, tiles: int | tuple[int, int] | None = None, model: int = 6, **kwargs) -> None:
         """
             Simple utility class for doubling a clip using Waifu2x
 
-            :param cuda:            ORT-Cuda if True, NCNN-VK if False, TRT if some string
-            :param fp16:            Uses 16 bit floating point internally if True
-            :param num_streams:     Amount of streams to use for Waifu2x; Sacrifices a lot of vram for a speedup
-            :param w2xargs:         Args that get passed to Waifu2x
+            :param cuda:            ORT-Cuda if True, NCNN-VK or CPU (depending on what you have installed) if False, TRT if some string
+                                    Automatically chosen and tuned when None
+            :param fp16:            Uses 16 bit floating point internally if True.
+            :param num_streams:     Amount of streams to use for Waifu2x; Sacrifices a lot of vram for a speedup.
+            :param tiles:           Splits up the upscaling process into multiple tiles.
+                                    You will likely have to use atleast `2` if you have less than 16 GB of VRAM.
+            :param model:           Model to use from vsmlrt.
+            :param kwargs:          Args that get passed to both the Backend and actual scaling function.
         """
         from vsmlrt import Backend
-        self.backend = Backend.ORT_CUDA(num_streams=num_streams, fp16=fp16) if cuda == True else \
-            Backend.NCNN_VK(num_streams=num_streams, fp16=fp16) if cuda == False else Backend.TRT(num_streams=num_streams, fp16=fp16)
+
+        self.kwargs = {'num_streams': num_streams, 'fp16': fp16}
+
+        # Partially stolen from setsu but removed useless stuff that is default in mlrt already and added version checks
+        if cuda is None:
+            nv = get_nvidia_version()
+            cuda = nv is not None
+            try:
+                if nv is not None and not hasattr(core, 'trt') and hasattr(core, 'ort'):
+                    self.kwargs.update({'use_cuda_graph': True})
+                else:
+                    props: KwargsT = core.trt.DeviceProperties(kwargs.get('device_id', 0))
+                    version_props: KwargsT = core.trt.Version()
+
+                    vram = props.get('total_global_memory', 0)
+                    trt_version = float(version_props.get('tensorrt_version', 0))
+
+                    cuda = 'trt'
+
+                    presumedArgs = KwargsT(
+                        workspace=vram / (1 << 22) if vram else None,
+                        use_cuda_graph=True, use_cublas=True, use_cudnn=trt_version < 8400, 
+                        heuristic=trt_version >= 8500, output_format=int(fp16), tf32=not fp16, force_fp16=fp16
+                    )
+                    self.kwargs.update(presumedArgs)
+            except:
+                cuda = nv is not None
+
+        self.w2xargs = KwargsT(
+            model=model, tiles=tiles, preprocess=kwargs.pop('preprocess', True),
+            scale=kwargs.pop('scale', 2), tilesize=kwargs.pop('tilesize', None), overlap=kwargs.pop('overlap', None)
+        )
+
+        self.kwargs.update(kwargs)
+
+        if cuda is False:
+            if hasattr(core, 'ncnn'):
+                self.backend = Backend.NCNN_VK(**self.kwargs)
+            else:
+                self.kwargs.pop('device_id')
+                self.backend = Backend.ORT_CPU(**self.kwargs) if hasattr(core, 'ort') \
+                    else Backend.OV_CPU(**self.kwargs)
+        elif cuda is True:
+            self.backend = Backend.ORT_CUDA(**self.kwargs) if hasattr(core, 'ort') \
+                else Backend.OV_GPU(**self.kwargs)              
+        else:
+            self.backend = Backend.TRT(**self.kwargs)
+
         self.kwargs = kwargs
+        self.model = model
 
     def double(self, clip: vs.VideoNode) -> vs.VideoNode:
         from vsmlrt import Waifu2x
@@ -113,22 +162,30 @@ class Waifu2x_Doubler(Doubler):
         height = pre.height + top + bottom
         pad = pre.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
 
-        was_444 = pre.format.color_family == vs.YUV and pre.format.subsampling_w == 0 and pre.format.subsampling_h == 0
+        # Model 0 wants a gray input
+        needs_gray = self.w2xargs.get('model', 6) == 0
+        was_444 = pre.format.color_family == vs.YUV and pre.format.subsampling_w == 0 and pre.format.subsampling_h == 0 and not needs_gray
 
         if was_444:
             pad = Catrom().resample(pad, format=vs.RGBS, matrix=Matrix.RGB, matrix_in=Matrix.from_video(pre))
+        elif needs_gray is True:
+            pad = get_y(pad)
         else: 
             pad = get_y(pad).std.ShufflePlanes(0, vs.RGB)
 
-        up = Waifu2x(pad, noise=-1, model=6, backend=self.backend, **self.kwargs)
+        up = Waifu2x(pad, noise=-1, backend=self.backend, **self.w2xargs)
 
         if was_444:
             up = Catrom().resample(up, format=vs.YUV444PS, matrix=Matrix.from_video(pre), matrix_in=Matrix.RGB)
-        else:
+        elif needs_gray is False:
             up = up.std.ShufflePlanes(0, vs.GRAY)
 
         up = up.std.Crop(left * 2, right * 2, top * 2, bottom * 2)
-        up = up.std.Expr("x 0.5 255 / +")
+
+        # Only Model 6 has the tint
+        if self.w2xargs.get('model', 6) == 6:
+            up = up.std.Expr("x 0.5 255 / +")
+        
         return depth(up, get_depth(clip)).std.CopyFrameProps(pre)
  
 class Clamped_Doubler(Doubler):
