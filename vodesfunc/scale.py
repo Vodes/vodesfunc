@@ -124,8 +124,12 @@ class Waifu2x_Doubler(Doubler):
                     presumedArgs = KwargsT(
                         workspace=vram / (1 << 22) if vram else None,
                         use_cuda_graph=True, use_cublas=True, use_cudnn=trt_version < 8400, 
-                        heuristic=trt_version >= 8500, output_format=int(fp16), tf32=not fp16, force_fp16=fp16
-                    )
+                        heuristic=trt_version >= 8500, output_format=int(fp16))
+                    
+                    # Swinunet doesn't like forced 16. Further testing for the other models needed.
+                    if model <= 6:
+                        presumedArgs.update({'tf32': not fp16, 'force_fp16': fp16})
+                        
                     self.kwargs.update(presumedArgs)
             except:
                 cuda = nv is not None
@@ -173,13 +177,17 @@ class Waifu2x_Doubler(Doubler):
         else: 
             pad = get_y(pad).std.ShufflePlanes(0, vs.RGB)
 
+        print(pad)
+
         up = Waifu2x(pad, noise=-1, backend=self.backend, **self.w2xargs)
+
+        print(up)
 
         if was_444:
             up = Catrom().resample(up, format=vs.YUV444PS, matrix=Matrix.from_video(pre), matrix_in=Matrix.RGB)
         elif needs_gray is False:
             up = up.std.ShufflePlanes(0, vs.GRAY)
-
+        print(up.format)
         up = up.std.Crop(left * 2, right * 2, top * 2, bottom * 2)
 
         # Only Model 6 has the tint
