@@ -24,7 +24,7 @@ class src_file:
     src_cut: vs.VideoNode
     trim: Trim = None
 
-    def __init__(self, file: PathLike, trim_start: int = 0, trim_end: int = 0, idx: Callable[[str], vs.VideoNode] = None, force_lsmas: bool = False) -> None:
+    def __init__(self, file: PathLike, trim_start: int = 0, trim_end: int = 0, idx: Callable[[str], vs.VideoNode] = None, force_lsmas: bool = False, **kwargs) -> None:
         """
             Custom `FileInfo` kind of thing for convenience
 
@@ -35,7 +35,7 @@ class src_file:
             :param force_lsmas:     Forces the use of lsmas inside of `vodesfunc.src`
         """
         self.file = file if isinstance(file, Path) else Path(file)
-        self.src = idx(str(self.file.resolve())) if idx else src(str(self.file.resolve()), force_lsmas)
+        self.src = idx(str(self.file.resolve())) if idx else src(str(self.file.resolve()), force_lsmas, **kwargs)
         if trim_start is None:
             trim_start = 0
         if trim_start != 0 or trim_end != 0:
@@ -58,7 +58,7 @@ class src_file:
 
 SRC_FILE = src_file
 
-def src(filePath: str = None, force_lsmas: bool = False, delete_dgi_log: bool = True) -> vs.VideoNode:
+def src(filePath: str = None, force_lsmas: bool = False, delete_dgi_log: bool = True, **kwargs) -> vs.VideoNode:
     """
         Uses dgindex as Source and requires dgindexnv in path
         to generate files if they don't exist.
@@ -69,7 +69,7 @@ def src(filePath: str = None, force_lsmas: bool = False, delete_dgi_log: bool = 
         :return:                Video Node
     """
     if filePath.lower().endswith('.dgi'):
-        return core.dgdecodenv.DGSource(filePath)
+        return core.dgdecodenv.DGSource(filePath, **kwargs)
 
     import shutil as sh
     from pathlib import Path
@@ -96,13 +96,13 @@ def src(filePath: str = None, force_lsmas: bool = False, delete_dgi_log: bool = 
         print('Parsing mediainfo failed. (Do you have pymediainfo installed?)')
 
     if force_lsmas or forceFallBack:
-        return core.lsmas.LWLibavSource(filePath)
+        return core.lsmas.LWLibavSource(filePath, **kwargs)
 
     path = Path(filePath)
     dgiFile = path.with_suffix('.dgi')
 
     if dgiFile.exists():
-        return core.dgdecodenv.DGSource(dgiFile.resolve(True))
+        return core.dgdecodenv.DGSource(dgiFile.resolve(True), **kwargs)
     else:
         print("Generating dgi file...")
         import os
@@ -111,7 +111,7 @@ def src(filePath: str = None, force_lsmas: bool = False, delete_dgi_log: bool = 
                   shell=True, stdout=sub.DEVNULL, cwd=path.parent.resolve(True)).wait()
         if path.with_suffix('.log').exists() and delete_dgi_log:
             os.remove(path.with_suffix('.log').resolve(True))
-        return core.dgdecodenv.DGSource(dgiFile.resolve(True))
+        return core.dgdecodenv.DGSource(dgiFile.resolve(True), **kwargs)
 
 
 def set_output(clip: vs.VideoNode, name: str = None, frame_info: bool = False, allow_comp: bool = True) -> vs.VideoNode:
