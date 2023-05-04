@@ -77,24 +77,25 @@ def src(filePath: str = None, force_lsmas: bool = False, delete_dgi_log: bool = 
     forceFallBack = sh.which('dgindexnv') is None or not hasattr(core, "dgdecodenv")
 
     # I don't want that to be a hard dependency :trollhd:
-    try:
-        import pymediainfo as pym
-        parsed = pym.MediaInfo.parse(filePath, parse_speed=0.25)
-        trackmeta = parsed.video_tracks[0].to_data()
-        format = trackmeta.get('format')
-        bitdepth = trackmeta.get('bit_depth')
-        if (format is not None and bitdepth is not None):
-            if (str(format).strip().lower() == 'avc' and int(bitdepth) > 8):
-                forceFallBack = True
-                print(f'Falling back to lsmas for Hi10 ({Path(filePath).name})')
-            elif(str(format).strip().lower() == 'ffv1'):
-                forceFallBack = True
-                print(f'Falling back to lsmas for FFV1 ({Path(filePath).name})')
-    except OSError:
-        print('pymediainfo could not find the mediainfo library! (it needs to be in path)')
-    except:
-        print('Parsing mediainfo failed. (Do you have pymediainfo installed?)')
-
+    if not force_lsmas:
+        try:
+            import pymediainfo as pym
+            parsed = pym.MediaInfo.parse(filePath, parse_speed=0.25)
+            trackmeta = parsed.video_tracks[0].to_data()
+            format = trackmeta.get('format')
+            bitdepth = trackmeta.get('bit_depth')
+            if (format is not None and bitdepth is not None):
+                if (str(format).strip().lower() == 'avc' and int(bitdepth) > 8):
+                    forceFallBack = True
+                    print(f'Falling back to lsmas for Hi10 ({Path(filePath).name})')
+                elif(str(format).strip().lower() == 'ffv1'):
+                    forceFallBack = True
+                    print(f'Falling back to lsmas for FFV1 ({Path(filePath).name})')
+        except OSError:
+            print('pymediainfo could not find the mediainfo library! (it needs to be in path)')
+        except:
+            print('Parsing mediainfo failed. (Do you have pymediainfo installed?)')
+            
     if force_lsmas or forceFallBack:
         return core.lsmas.LWLibavSource(filePath, **kwargs)
 
