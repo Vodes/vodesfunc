@@ -101,10 +101,15 @@ class DescaleTarget(TargetVals):
         if self.line_mask != False:
             if not isinstance(self.line_mask, vs.VideoNode):
                 try:
-                    from vsmask.edge import KirschTCanny
-                except:
                     from vsmasktools.edge import KirschTCanny
-                self.line_mask = KirschTCanny().edgemask(clip, lthr=80 << 8, hthr=150 << 8)
+                    try:
+                        # Scaling was changed so I abuse the new param to check if its the newer version
+                        self.line_mask = KirschTCanny().edgemask(clip, lthr=80 / 255, hthr=150 / 255, planes=(0, True))
+                    except:
+                        self.line_mask = KirschTCanny().edgemask(clip, lthr=80 << 8, hthr=150 << 8)
+                except:
+                    from vsmask.edge import KirschTCanny
+                    self.line_mask = KirschTCanny().edgemask(clip, lthr=80 << 8, hthr=150 << 8)
             
             if self.do_post_double is not None:
                 self.line_mask = self.line_mask.std.Inflate()
