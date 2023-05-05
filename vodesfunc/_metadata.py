@@ -1,6 +1,6 @@
 """Vodes's Vapoursynth Functions."""
 
-__version__ = '1.3.6'
+__version__ = '1.3.7'
 
 __author__ = 'Vodes <vodes.imp@gmail.com>'
 __maintainer__ = __author__
