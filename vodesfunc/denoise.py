@@ -74,7 +74,7 @@ def schizo_denoise(src: vs.VideoNode, sigma: float | list[float] = [0.8, 0.3], t
 
     nlmfunc = core.knlm.KNLMeansCL if not hasattr(core, "nlm_cuda") or not cuda[0] else core.nlm_cuda.NLMeans
 
-    if sigma.count == 3:
+    if len(sigma) == 3:
         clip_u = nlmfunc(clip, a=nlm_a, d=radius[1], h=sigma[1], channels='U')
         clip_v = nlmfunc(clip, a=nlm_a, d=radius[1], h=sigma[2], channels='V')
         nlm = join(get_y(clip), get_u(clip_u), get_v(clip_v))
