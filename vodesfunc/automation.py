@@ -177,7 +177,7 @@ class Setup:
 
     def encode_audio(self, file: PathLike | src_file, track: int = 0, codec: str = 'opus', q: int = 200,
                      encoder_settings: str = '', trim: Trim = None, clip: vs.VideoNode | src_file = None,# use_bs_trimming: bool = False,
-                     dither_flac: bool = True, always_dither: bool = False, quiet: bool = True) -> str:
+                     dither_flac: bool = True, dither_method: str = 'triangular', always_dither: bool = False, quiet: bool = True) -> str:
         """
             Encodes the audio
 
@@ -190,6 +190,7 @@ class Setup:
             :param trim:                Tuple of frame numbers; Can be left empty if you passed a `src_file` with trims
             :param clip:                Vapoursynth VideoNode needed when trimming; Can be left empty if you passed a `src_file`
             :param dither_flac:         Will dither your FLAC output to 16bit and 48 kHz
+            :param dither_method:       Specify the dithering algorithmn used when reducing audio bit depth.
             :param always_dither:       Dithers regardless of your final output
             :param quiet:               Will print the subprocess outputs if False
             :return:                    Absolute filepath for resulting audio file
@@ -242,7 +243,7 @@ class Setup:
             compression_level = "10" if not is_intermediary else "0"
             commandline = f'{ffmpeg_header()} -i "{file.resolve()}" -map_metadata -1 -map_chapters -1 -map 0:a:{track} {ffmpeg_seekargs()} -f flac -compression_level {compression_level}'
             if (dither_flac and codec.lower() == 'flac') or always_dither:
-                commandline += ' -sample_fmt s16 -ar 48000 -resampler soxr -precision 28 -dither_method shibata'
+                commandline += f' -sample_fmt s16 -ar 48000 -resampler soxr -precision 28 -dither_method {dither_method}'
             if codec.lower() != 'opus':
                 _flac = base_path + ".flac"
                 if not should_create_again(_flac):
