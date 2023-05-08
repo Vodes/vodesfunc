@@ -190,7 +190,7 @@ class Setup:
             :param trim:                Tuple of frame numbers; Can be left empty if you passed a `src_file` with trims
             :param clip:                Vapoursynth VideoNode needed when trimming; Can be left empty if you passed a `src_file`
             :param dither_flac:         Will dither your FLAC output to 16bit and 48 kHz
-            :param dither_method:       Specify the dithering algorithmn used when reducing audio bit depth.
+            :param dither_method:       Specify the dithering algorithm used when reducing audio bit depth.
             :param always_dither:       Dithers regardless of your final output
             :param quiet:               Will print the subprocess outputs if False
             :return:                    Absolute filepath for resulting audio file
