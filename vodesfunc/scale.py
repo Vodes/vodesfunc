@@ -50,9 +50,8 @@ class NNEDI_Doubler(Doubler):
             (left, right, top, bottom) = mod_padding(y, 2, 2)
             width = clip.width + left + right
             height = clip.height + top + bottom
-            pad = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height)
-            doubled_y = pad.nnedi3cl.NNEDI3CL(dh=True, field=0, **self.ediargs).std.Transpose() \
-                .nnedi3cl.NNEDI3CL(dh=True, field=0, **self.ediargs).std.Transpose()
+            pad = y.resize.Point(width, height, src_left=-left, src_top=-top, src_width=width, src_height=height).std.Transpose()
+            doubled_y = pad.nnedi3cl.NNEDI3CL(dh=True, dw=True, field=0, **self.ediargs).std.Transpose()
             doubled_y = doubled_y.std.Crop(left * 2, right * 2, top * 2, bottom * 2)
         else:
             doubled_y = depth(y, 16).znedi3.nnedi3(dh=True, field=0, **self.ediargs).std.Transpose() \
@@ -60,7 +59,7 @@ class NNEDI_Doubler(Doubler):
             doubled_y = depth(doubled_y, get_depth(clip))
         
         if correct_shift:
-            doubled_y = doubled_y.resize.Bicubic(src_top=.5, src_left=.5)
+            doubled_y = doubled_y.resize.Point(src_top=.5, src_left=.5)
 
         return doubled_y.std.CopyFrameProps(y)
 
