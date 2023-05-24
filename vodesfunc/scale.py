@@ -59,7 +59,7 @@ class NNEDI_Doubler(Doubler):
             doubled_y = depth(doubled_y, get_depth(clip))
         
         if correct_shift:
-            doubled_y = doubled_y.resize.Point(src_top=.5, src_left=.5)
+            doubled_y = doubled_y.resize.Bicubic(src_top=.5, src_left=.5)
 
         return doubled_y.std.CopyFrameProps(y)
 
