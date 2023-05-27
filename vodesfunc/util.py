@@ -115,7 +115,7 @@ def src(filePath: str = None, force_lsmas: bool = False, delete_dgi_log: bool = 
         return core.dgdecodenv.DGSource(dgiFile.resolve(True), **kwargs)
 
 
-def set_output(clip: vs.VideoNode, name: str = None, frame_info: bool = False, allow_comp: bool = True) -> vs.VideoNode:
+def set_output(clip: vs.VideoNode, name: str = None, cache: bool = False, frame_info: bool = False, allow_comp: bool = True) -> vs.VideoNode:
     """
     Outputs a clip. Less to type.
     Designed to be used with the good ol 'from vodesfunc import *' and the 'out' alias
@@ -125,11 +125,15 @@ def set_output(clip: vs.VideoNode, name: str = None, frame_info: bool = False, a
     if not allow_comp:
         clip = clip.std.SetFrameProp('_VSPDisableComp', 1)
     if frame_info:
-        output = _print_frameinfo(clip, name)
-        output.set_output(len(vs.get_outputs()))
-    else:
-        clip.set_output(len(vs.get_outputs()))
-
+        clip = _print_frameinfo(clip, name)
+    if cache:
+        try:
+            from vstools import cache_clip
+            clip = cache_clip(clip)
+        except:
+            raise ImportError('cache_clip not found in vstools. update vstools to use caching.')
+        
+    clip.set_output(len(vs.get_outputs()))
     return clip
 
 
