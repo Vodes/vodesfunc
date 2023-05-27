@@ -115,7 +115,7 @@ def src(filePath: str = None, force_lsmas: bool = False, delete_dgi_log: bool = 
         return core.dgdecodenv.DGSource(dgiFile.resolve(True), **kwargs)
 
 
-def set_output(clip: vs.VideoNode, name: str = None, cache: bool | None = None, frame_info: bool = False, allow_comp: bool = True) -> vs.VideoNode:
+def set_output(clip: vs.VideoNode, name: str = None, frame_info: bool = False, allow_comp: bool = True, cache: bool | None = None) -> vs.VideoNode:
     """
     Outputs a clip. Less to type.
     Designed to be used with the good ol 'from vodesfunc import *' and the 'out' alias
