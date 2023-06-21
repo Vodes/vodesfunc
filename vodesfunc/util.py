@@ -12,7 +12,6 @@ core = vs.core
 
 
 __all__: list[str] = [
-    'set_output_source', 'out_src',
     'set_output', 'out',
     'src_file', 'SRC_FILE', 'src', 'source',
 ]
@@ -120,53 +119,19 @@ def set_output(clip: vs.VideoNode, name: str = None, frame_info: bool = False, a
     Outputs a clip. Less to type.
     Designed to be used with the good ol 'from vodesfunc import *' and the 'out' alias
     """
-    if cache is None:
-        try:
-            from vspreview import is_preview
-            cache = is_preview()
-        except Exception:
-            ...
-    
-    if name is not None:
-        clip = clip.std.SetFrameProp('Name', data=name)
-    if not allow_comp:
-        clip = clip.std.SetFrameProp('_VSPDisableComp', 1)
     if frame_info:
         clip = _print_frameinfo(clip, name)
-    if cache:
-        try:
-            from vstools import cache_clip
-            clip = cache_clip(clip)
-        except ImportError:
-            print('cache_clip not found in vstools. update vstools to use caching.')
-        
-    clip.set_output(len(vs.get_outputs()))
-    return clip
 
-
-def set_output_source(filePath: str | src_file, clip: vs.VideoNode = None, frame_info: bool = False) -> vs.VideoNode:
-    """
-    Outputs your source clip while also outputting the audio for it
-    so scenefiltering becomes less boring
-
-    Also returns the clip in case you wanna use it at the start of your script
-    """
-    filePath = filePath if isinstance(filePath, str) else str(filePath.file.resolve())
-
-    if clip is None:
-        clip = src(filePath)
-
-    clip = clip.std.SetFrameProp('Name', data='Source')
-    if frame_info:
-        output = _print_frameinfo(clip, 'Source')
-        output.set_output(len(vs.get_outputs()))
-    else:
+    try:
+        from vspreview import is_preview, set_output as setsu_sucks
+        if cache is None:
+            cache = is_preview()
+        setsu_sucks(clip, name=name, cache=cache, disable_comp=not allow_comp)
+    except:
+        if name is not None:
+            clip = clip.std.SetFrameProp('Name', data=name)
         clip.set_output(len(vs.get_outputs()))
-
-    audio = core.bs.AudioSource(filePath)
-    audio.set_output(len(vs.get_outputs()) + 20)
     return clip
-
 
 def _print_frameinfo(clip: vs.VideoNode, title: str = '') -> vs.VideoNode:
     style = ("sans-serif,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,"
@@ -209,5 +174,4 @@ def is_x264_zone(zone: Zone) -> bool:
         return False
 
 out = set_output
-out_src = set_output_source
 source = src
