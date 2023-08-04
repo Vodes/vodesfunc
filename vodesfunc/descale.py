@@ -1,6 +1,7 @@
 from vstools import vs, core, get_w, get_y, depth, iterate, ColorRange, join, get_depth
 from vskernels import Scaler, ScalerT, Kernel, KernelT, Catrom
-from typing import Callable
+from vsmasktools import EdgeDetectT, EdgeDetect
+from typing import Callable, Sequence, Union
 from math import floor
 from dataclasses import dataclass
 
@@ -46,6 +47,9 @@ class DescaleTarget(TargetVals):
         :param credit_mask_thr: The error threshold of the automatically generated credit mask.
         :param credit_mask_bh:  Generates an error mask based on a descale using the baseheight. For some reason had better results with this on some shows.
         :param line_mask:       Can be used to pass a mask that'll be used or False to disable line masking.
+                                You can also pass a list containing edgemask function, scaler and thresholds to generate the mask on the doubled clip.
+                                Which may or may not result in something better.
+                                For example: line_mask=(KirschTCanny, Bilinear, 50 / 250, 150 / 250)
         :param bbmod_masks:     Specify rows to be bbmod'ed for a clip to generate the masks on. Will probably be useful for the new border param in descale.
     """
     height: float
@@ -59,7 +63,7 @@ class DescaleTarget(TargetVals):
     credit_mask: vs.VideoNode | bool | None = None
     credit_mask_thr: float = 0.04
     credit_mask_bh: bool = False
-    line_mask: vs.VideoNode | bool | None = None
+    line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float]] | None = None
     bbmod_masks: int | list[int] = 0 # Not actually implemented yet lol
 
     def generate_clips(self, clip: vs.VideoNode) -> 'DescaleTarget':
@@ -98,7 +102,7 @@ class DescaleTarget(TargetVals):
             else:
                 ref_y = self.rescale
             
-        if self.line_mask != False:
+        if self.line_mask != False and not isinstance(self.line_mask, Sequence):
             if not isinstance(self.line_mask, vs.VideoNode):
                 try:
                     from vsmasktools.edge import KirschTCanny
@@ -169,6 +173,13 @@ class DescaleTarget(TargetVals):
         self.rescale = depth(self.rescale, 16)
 
         if self.line_mask != False:
+            if isinstance(self.line_mask, Sequence):
+                if len(self.line_mask) < 4:
+                    raise ValueError("DescaleTarget line_mask must contain an Edgemask, Downscaler, lthr and hthr if you passed a list.")
+                mask_fun = EdgeDetect.ensure_obj(self.line_mask[0])
+                mask = mask_fun.edgemask(self.doubled, self.line_mask[2], self.line_mask[3], planes=0)
+                self.line_mask = Scaler.ensure_obj(self.line_mask[1]).scale(mask, clip.width, clip.height)
+                
             self.upscale = y.std.MaskedMerge(self.upscale, self.line_mask)
 
         if self.credit_mask != False or self.credit_mask_thr <= 0:
