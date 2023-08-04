@@ -1,13 +1,14 @@
 import vapoursynth as vs
 core = vs.core
 
-from vstools import depth, get_y
+from vstools import KwargsT, depth, get_y
 from functools import partial
 from typing import Callable
 
 
 def lehmer_merge(*clips: vs.VideoNode, 
-        lowpass: Callable[[vs.VideoNode], vs.VideoNode]=lambda i: core.std.BoxBlur(i, hradius=3, vradius=3, hpasses=2, vpasses=2)):
+        lowpass: Callable[[vs.VideoNode], vs.VideoNode]=lambda i: core.std.BoxBlur(i, hradius=3, vradius=3, hpasses=2, vpasses=2), 
+        **kwargs: KwargsT):
     """
         Perform a lehmer merge using a bunch of clips with the goal of getting the detail from each.
         Credits to Zewia
@@ -17,26 +18,13 @@ def lehmer_merge(*clips: vs.VideoNode,
 
         :return:            Merged clip
     """
-    clips = list(clips)
-    count = len(clips)
-    expr = ""
-
-    for i in range(count):
-        expr += f"src{i} src{count + i} - D{i}! "
-
-    for v in range(2):
-        for i in range(count):
-            expr += f"D{i}@ {v + 2} pow "
-        expr += "+ " * (count - 1) + f"P{v}! "
-
-    for i in range(count):
-        expr += f"src{count + i} "
-    expr += "+ " * (count - 1) + f"{count} / "
-
-    expr += "P0@ 0 = 0 P1@ P0@ / ? +"
-
-    blur = [lowpass(i) for i in clips]
-    return core.akarin.Expr(clips + blur, expr)
+    print("vodesfunc.lehmer_merge is deprecated. Please use vsdenoise.frequency_merge!")
+    from vsdenoise import frequency_merge
+    args = KwargsT(
+        lowpass=lowpass
+    )
+    args.update(**kwargs)
+    return frequency_merge(clips, **args)
 
 
 def dirty_prop_set(clip: vs.VideoNode, threshold: int = 1100, luma_scaling: int = 24, prop_name: str = None,
