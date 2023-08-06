@@ -272,3 +272,6 @@ class MixedRescale:
         #self.doubled = _selector([t._return_doubled() for t in targets])
         self.credit_mask = _selector([t._return_creditmask() for t in targets])
         self.line_mask = _selector([t._return_linemask() for t in targets])
+
+    def get_upscaled(self, *_) -> vs.VideoNode:
+        return self.upscaled
