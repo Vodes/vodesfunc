@@ -1,8 +1,9 @@
-import vapoursynth as vs
+from vstools import vs, KwargsT
 
 from functools import partial
 from typing import Callable
 from pathlib import Path
+
 from .types import PathLike, Trim, Zone
 from .auto.parsing import parse_m2ts_path
 import os
@@ -114,7 +115,7 @@ def src(filePath: str = None, force_lsmas: bool = False, delete_dgi_log: bool = 
         return core.dgdecodenv.DGSource(dgiFile.resolve(True), **kwargs)
 
 
-def set_output(clip: vs.VideoNode, name: str = None, frame_info: bool = False, allow_comp: bool = True, cache: bool | None = None) -> vs.VideoNode:
+def set_output(clip: vs.VideoNode, name: str = None, frame_info: bool = False, allow_comp: bool = True, cache: bool | None = None, **kwargs: KwargsT) -> vs.VideoNode:
     """
     Outputs a clip. Less to type.
     Designed to be used with the good ol 'from vodesfunc import *' and the 'out' alias
@@ -123,10 +124,13 @@ def set_output(clip: vs.VideoNode, name: str = None, frame_info: bool = False, a
         clip = _print_frameinfo(clip, name)
 
     try:
+        args = KwargsT(name=name, cache=cache, disable_comp=not allow_comp)
+        if kwargs:
+            args.update(**kwargs)
         from vspreview import is_preview, set_output as setsu_sucks
         if cache is None:
             cache = is_preview()
-        setsu_sucks(clip, name=name, cache=cache, disable_comp=not allow_comp)
+        setsu_sucks(clip, **args)
     except:
         if name is not None:
             clip = clip.std.SetFrameProp('Name', data=name)
