@@ -5,6 +5,7 @@ from vstools import KwargsT, depth, get_y
 from functools import partial
 from typing import Callable
 
+__all__ = ["lehmer_merge", "dirty_prop_set"]
 
 def lehmer_merge(*clips: vs.VideoNode, 
         lowpass: Callable[[vs.VideoNode], vs.VideoNode]=lambda i: core.std.BoxBlur(i, hradius=3, vradius=3, hpasses=2, vpasses=2), 
