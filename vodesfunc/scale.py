@@ -1,6 +1,6 @@
 from typing import Any, Callable
-from vskernels import Catrom, Kernel, Scaler
-from vstools import vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version
+from vskernels import Catrom, Kernel, Scaler, ScalerT
+from vstools import vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version, Transfer
 from vsrgtools.sharp import unsharp_masked
 from .types import PathLike
 from abc import ABC, abstractmethod
@@ -28,6 +28,27 @@ class Doubler(ABC):
             Returns doubled clip
         """
         pass
+
+    
+class LinearScaler(Scaler):
+
+    def __init__(self, scaler: ScalerT, **kwargs: KwargsT) -> None:
+        """
+        Simple scaler class to do your scaling business in linear light.
+        
+        :params scaler:     Any vsscale scaler class/object
+        """
+        self.scaler = Scaler.ensure_obj(scaler)
+        self.kwargs = kwargs
+
+    def scale(self, clip: vs.VideoNode, width: int, height: int, shift: tuple[float, float] = (0, 0), **kwargs) -> vs.VideoNode:
+        trans_in = Transfer.from_video(clip)
+        clip = clip.resize.Point(transfer_in=trans_in, transfer=Transfer.LINEAR)
+        args = KwargsT(clip=clip, width=width, height=height, shift=shift)
+        args.update(**kwargs)
+        args.update(**self.kwargs)
+        scaled = self.scaler.scale(**args)
+        return scaled.resize.Point(transfer_in=Transfer.LINEAR, transfer=trans_in)
 
 class NNEDI_Doubler(Doubler):
     ediargs: dict[str, Any]
