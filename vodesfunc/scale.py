@@ -1,5 +1,5 @@
 from typing import Any, Callable
-from vskernels import Catrom, Kernel, Scaler, ScalerT
+from vskernels import Catrom, Kernel, Scaler, ScalerT, Lanczos
 from vstools import vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version, Transfer
 from vsrgtools.sharp import unsharp_masked
 from .types import PathLike
@@ -12,8 +12,42 @@ __all__: list[str] = [
     'Shader_Doubler',
     'Waifu2x_Doubler',
     'vodes_rescale',
-    'LinearScaler'
+    'LinearScaler',
+    'Lanczos_PreSS'
 ]
+
+class LinearScaler(Scaler):
+
+    def __init__(self, scaler: ScalerT, **kwargs: KwargsT) -> None:
+        """
+            Simple scaler class to do your scaling business in linear light.
+        
+            :params scaler:     Any vsscale scaler class/object
+        """
+        self.scaler = Scaler.ensure_obj(scaler)
+        self.kwargs = kwargs
+
+    def scale(self, clip: vs.VideoNode, width: int, height: int, shift: tuple[float, float] = (0, 0), **kwargs) -> vs.VideoNode:
+        trans_in = Transfer.from_video(clip)
+        clip = clip.resize.Point(transfer_in=trans_in, transfer=Transfer.LINEAR)
+        args = KwargsT(clip=clip, width=width, height=height, shift=shift)
+        args.update(**kwargs)
+        args.update(**self.kwargs)
+        scaled = self.scaler.scale(**args)
+        return scaled.resize.Point(transfer_in=Transfer.LINEAR, transfer=trans_in)
+    
+class Lanczos_PreSS(Scaler):
+    """
+        Convenience class to pass to a dehalo function.
+        This serves the same purpose as NNEDI to double and reverse using point. 
+        Except it is a quite a bit faster and (if using opencl) takes a lot of load off the GPU.
+    """
+
+    def scale(self, clip: vs.VideoNode, width: int, height: int, shift: tuple[float, float] = (0, 0), **kwargs) -> vs.VideoNode:
+        if width != clip.width * 2 or height != clip.height * 2:
+            raise ValueError("Lanczos_PreSS: You're probably not using this correctly.")
+        return Lanczos.scale(clip, width, height, (-0.25, -0.25))
+
 
 class Doubler(ABC):
     
@@ -30,26 +64,6 @@ class Doubler(ABC):
         """
         pass
 
-    
-class LinearScaler(Scaler):
-
-    def __init__(self, scaler: ScalerT, **kwargs: KwargsT) -> None:
-        """
-        Simple scaler class to do your scaling business in linear light.
-        
-        :params scaler:     Any vsscale scaler class/object
-        """
-        self.scaler = Scaler.ensure_obj(scaler)
-        self.kwargs = kwargs
-
-    def scale(self, clip: vs.VideoNode, width: int, height: int, shift: tuple[float, float] = (0, 0), **kwargs) -> vs.VideoNode:
-        trans_in = Transfer.from_video(clip)
-        clip = clip.resize.Point(transfer_in=trans_in, transfer=Transfer.LINEAR)
-        args = KwargsT(clip=clip, width=width, height=height, shift=shift)
-        args.update(**kwargs)
-        args.update(**self.kwargs)
-        scaled = self.scaler.scale(**args)
-        return scaled.resize.Point(transfer_in=Transfer.LINEAR, transfer=trans_in)
 
 class NNEDI_Doubler(Doubler):
     ediargs: dict[str, Any]
