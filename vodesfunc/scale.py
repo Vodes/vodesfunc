@@ -12,6 +12,7 @@ __all__: list[str] = [
     'Shader_Doubler',
     'Waifu2x_Doubler',
     'vodes_rescale',
+    'LinearScaler'
 ]
 
 class Doubler(ABC):
