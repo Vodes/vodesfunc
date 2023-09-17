@@ -1,6 +1,6 @@
 from typing import Any, Callable
 from vskernels import Catrom, Kernel, Scaler, ScalerT, Lanczos
-from vstools import vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version, Transfer
+from vstools import inject_self, vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version, Transfer
 from vsrgtools.sharp import unsharp_masked
 from .types import PathLike
 from abc import ABC, abstractmethod
@@ -48,6 +48,7 @@ class Lanczos_PreSS(Scaler):
         Except it is a quite a bit faster and (if using opencl) takes a lot of load off the GPU.
     """
 
+    @inject_self.init_kwargs.clean
     def scale(self, clip: vs.VideoNode, width: int, height: int, shift: tuple[float, float] = (0, 0), **kwargs) -> vs.VideoNode:
         if width != clip.width * 2 or height != clip.height * 2:
             raise ValueError("Lanczos_PreSS: You're probably not using this correctly.")
