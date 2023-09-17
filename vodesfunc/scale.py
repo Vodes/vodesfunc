@@ -28,6 +28,10 @@ class LinearScaler(Scaler):
         self.kwargs = kwargs
 
     def scale(self, clip: vs.VideoNode, width: int, height: int, shift: tuple[float, float] = (0, 0), **kwargs) -> vs.VideoNode:
+        if clip.format.subsampling_h != 0 or clip.format.subsampling_w != 0:
+            print(clip.format.subsampling_h, clip.format.subsampling_w)
+            raise ValueError("LinearScaler: Using linear scaling on a subsampled clip results in very poor output. Please don't do it.")
+        
         trans_in = Transfer.from_video(clip)
         clip = clip.resize.Point(transfer_in=trans_in, transfer=Transfer.LINEAR)
         args = KwargsT(clip=clip, width=width, height=height, shift=shift)
@@ -36,6 +40,7 @@ class LinearScaler(Scaler):
         scaled = self.scaler.scale(**args)
         return scaled.resize.Point(transfer_in=Transfer.LINEAR, transfer=trans_in)
     
+
 class Lanczos_PreSS(Scaler):
     """
         Convenience class to pass to a dehalo function.
