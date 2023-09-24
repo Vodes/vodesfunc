@@ -26,7 +26,7 @@ def adaptive_grain(clip: vs.VideoNode, strength: float | list[float] = [2.0, 0.5
                                     Default chroma grain is luma / 5.
         :param size:                Grain size. Will be passed as xsize and ysize. Can be adjusted individually with a list.
                                     This should not be confused with the resizing of adptvgrnMod. For something similar, use the `scale` param.
-        :param type:                See vs-noise github for 0-3. Type 4 is type 2 with a 0.7 scale and using BicubicDidee as the scaler.
+        :param type:                See vs-noise github for 0-4.
         :param static:              Static or dynamic grain.
         :param seed:                Grain seed for the grainer.
         :param temporal_average:    Reference frame weighting for temporal softening and grain consistency.
