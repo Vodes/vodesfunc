@@ -48,8 +48,8 @@ class SigmoidScaler(Scaler):
             Simple scaler class to do your scaling business in sigmoid light.
 
             :params scaler:     Any vsscale scaler class/object
-            :param sig_slope:   Curvature value for the sigmoid curve, in range 1–20. The higher the curvature value, the more non-linear the function.
-            :param sig_center:  Inflection point for the sigmoid curve, in range 0–1. The closer to 1, the more the curve looks like a standard power curve.
+            :param sig_slope:   Curvature value for the sigmoid curve, in range 1-20. The higher the curvature value, the more non-linear the function.
+            :param sig_center:  Inflection point for the sigmoid curve, in range 0-1. The closer to 1, the more the curve looks like a standard power curve.
         """
         self.scaler = Scaler.ensure_obj(scaler)
         self.sig_slope = sig_slope
@@ -67,10 +67,9 @@ class SigmoidScaler(Scaler):
         if not 0.0 <= sig_center <= 1.0:
             raise ValueError("sig_center only accepts values from 0.0 to 1.0 inclusive.")
         if clip.format.subsampling_h != 0 or clip.format.subsampling_w != 0:
-            print(clip.format.subsampling_h, clip.format.subsampling_w)
             raise ValueError("SigmoidScaler: Using sigmoid scaling on a subsampled clip results in very poor output. Please don't do it.")
 
-        trans_in = Transfer.from_video(clip, True)
+        trans_in = Transfer.from_video(clip)
         convert_csp = (Matrix.from_transfer(trans_in), clip.format)
         sig_offset = 1.0 / (1 + exp(sig_slope * sig_center))
         sig_scale = 1.0 / (1 + exp(sig_slope * (sig_center - 1))) - sig_offset
