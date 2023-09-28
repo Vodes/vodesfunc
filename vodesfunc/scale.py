@@ -1,5 +1,5 @@
 from typing import Any, Callable
-from vskernels import Catrom, Kernel, Scaler, ScalerT, Lanczos
+from vskernels import Catrom, Kernel, Scaler, ScalerT, Lanczos, Point
 from vstools import inject_self, vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version, Transfer
 from vsrgtools.sharp import unsharp_masked
 from .types import PathLike
@@ -13,7 +13,8 @@ __all__: list[str] = [
     'Waifu2x_Doubler',
     'vodes_rescale',
     'LinearScaler',
-    'Lanczos_PreSS'
+    'Lanczos_PreSS',
+    'SigmoidScaler'
 ]
 
 class LinearScaler(Scaler):
@@ -40,6 +41,53 @@ class LinearScaler(Scaler):
         scaled = self.scaler.scale(**args)
         return scaled.resize.Point(transfer_in=Transfer.LINEAR, transfer=trans_in)
     
+class SigmoidScaler(Scaler):
+
+    def __init__(self, scaler: ScalerT, sig_slope: float = 6.5, sig_center: float = 0.75, **kwargs: KwargsT) -> None:
+        """
+            Simple scaler class to do your scaling business in sigmoid light.
+
+            :params scaler:     Any vsscale scaler class/object
+            :param sig_slope:   Curvature value for the sigmoid curve, in range 1-20. The higher the curvature value, the more non-linear the function.
+            :param sig_center:  Inflection point for the sigmoid curve, in range 0-1. The closer to 1, the more the curve looks like a standard power curve.
+        """
+        self.scaler = Scaler.ensure_obj(scaler)
+        self.sig_slope = sig_slope
+        self.sig_center = sig_center
+        self.kwargs = kwargs
+
+    def scale(self, clip: vs.VideoNode, width: int, height: int, shift: tuple[float, float] = (0, 0), **kwargs) -> vs.VideoNode:
+        from math import exp
+        from vsexprtools import norm_expr, ExprOp
+        
+        sig_slope = self.sig_slope
+        sig_center = self.sig_center
+        if not 1.0 <= sig_slope <= 20.0:
+            raise ValueError("sig_slope only accepts values from 1.0 to 20.0 inclusive.")
+        if not 0.0 <= sig_center <= 1.0:
+            raise ValueError("sig_center only accepts values from 0.0 to 1.0 inclusive.")
+        if clip.format.subsampling_h != 0 or clip.format.subsampling_w != 0:
+            raise ValueError("SigmoidScaler: Using sigmoid scaling on a subsampled clip results in very poor output. Please don't do it.")
+
+        trans_in = Transfer.from_video(clip)
+        convert_csp = (Matrix.from_transfer(trans_in), clip.format)
+        sig_offset = 1.0 / (1 + exp(sig_slope * sig_center))
+        sig_scale = 1.0 / (1 + exp(sig_slope * (sig_center - 1))) - sig_offset
+        
+        bits, clip = get_depth(clip), depth(clip, 32)
+        if clip.format and clip.format.color_family is not vs.RGB:
+            clip = Point.resample(clip, vs.RGBS, None, convert_csp[0])
+        clip = clip.resize.Point(transfer_in=trans_in, transfer=Transfer.LINEAR)
+        expr = f"{sig_center} 1 x {sig_scale} * {sig_offset} + / 1 - log {sig_slope} / -"
+        clip = norm_expr(clip, f'{expr} {ExprOp.clamp(0, 1)}')
+        args = KwargsT(clip=clip, width=width, height=height, shift=shift)
+        args.update(**kwargs)
+        args.update(**self.kwargs)
+        scaled = self.scaler.scale(**args)
+        expr = f"1 1 {sig_slope} {sig_center} x - * exp + / {sig_offset} - {sig_scale} /"
+        scaled = norm_expr(scaled, f'{expr} {ExprOp.clamp(0, 1)}')
+        scaled = Point.resample(scaled, convert_csp[1], convert_csp[0], transfer_in=Transfer.LINEAR, transfer=trans_in)
+        return depth(scaled, bits)
 
 class Lanczos_PreSS(Scaler):
     """
