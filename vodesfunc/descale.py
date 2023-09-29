@@ -47,9 +47,9 @@ class DescaleTarget(TargetVals):
         :param credit_mask_thr: The error threshold of the automatically generated credit mask.
         :param credit_mask_bh:  Generates an error mask based on a descale using the baseheight. For some reason had better results with this on some shows.
         :param line_mask:       Can be used to pass a mask that'll be used or False to disable line masking.
-                                You can also pass a list containing edgemask function, scaler and thresholds to generate the mask on the doubled clip.
-                                Which may or may not result in something better.
-                                For example: line_mask=(KirschTCanny, Bilinear, 50 / 250, 150 / 250)
+                                You can also pass a list containing edgemask function, scaler and thresholds to generate the mask on the doubled clip for potential better results.
+                                If None is passed to the first threshold then the mask won't be binarized. It will also run a Maximum and Inflate call on the mask.
+                                Example: line_mask=(KirschTCanny, Bilinear, 50 / 255, 150 / 255)
         :param bbmod_masks:     Specify rows to be bbmod'ed for a clip to generate the masks on. Will probably be useful for the new border param in descale.
     """
     height: float
@@ -63,7 +63,7 @@ class DescaleTarget(TargetVals):
     credit_mask: vs.VideoNode | bool | None = None
     credit_mask_thr: float = 0.04
     credit_mask_bh: bool = False
-    line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float]] | None = None
+    line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float | None]] | None = None
     bbmod_masks: int | list[int] = 0 # Not actually implemented yet lol
 
     def generate_clips(self, clip: vs.VideoNode) -> 'DescaleTarget':
@@ -177,7 +177,10 @@ class DescaleTarget(TargetVals):
                 if len(self.line_mask) < 4:
                     raise ValueError("DescaleTarget line_mask must contain an Edgemask, Downscaler, lthr and hthr if you passed a list.")
                 mask_fun = EdgeDetect.ensure_obj(self.line_mask[0])
-                mask = mask_fun.edgemask(self.doubled, self.line_mask[2], self.line_mask[3], planes=0)
+                if self.line_mask[2] is None:
+                    mask = mask_fun.edgemask(self.doubled, planes=0).std.Maximum().std.Inflate()
+                else:
+                    mask = mask_fun.edgemask(self.doubled, self.line_mask[2], self.line_mask[3], planes=0)
                 self.line_mask = Scaler.ensure_obj(self.line_mask[1]).scale(mask, clip.width, clip.height)
                 
             if get_depth(self.line_mask) == 32:
