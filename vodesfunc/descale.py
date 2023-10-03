@@ -47,9 +47,9 @@ class DescaleTarget(TargetVals):
         :param credit_mask_thr: The error threshold of the automatically generated credit mask.
         :param credit_mask_bh:  Generates an error mask based on a descale using the baseheight. For some reason had better results with this on some shows.
         :param line_mask:       Can be used to pass a mask that'll be used or False to disable line masking.
-                                You can also pass a list containing edgemask function, scaler and thresholds to generate the mask on the doubled clip.
-                                Which may or may not result in something better.
-                                For example: line_mask=(KirschTCanny, Bilinear, 50 / 250, 150 / 250)
+                                You can also pass a list containing edgemask function, scaler and thresholds to generate the mask on the doubled clip for potential better results.
+                                If None is passed to the first threshold then the mask won't be binarized. It will also run a Maximum and Inflate call on the mask.
+                                Example: line_mask=(KirschTCanny, Bilinear, 50 / 255, 150 / 255)
         :param bbmod_masks:     Specify rows to be bbmod'ed for a clip to generate the masks on. Will probably be useful for the new border param in descale.
     """
     height: float
@@ -63,7 +63,7 @@ class DescaleTarget(TargetVals):
     credit_mask: vs.VideoNode | bool | None = None
     credit_mask_thr: float = 0.04
     credit_mask_bh: bool = False
-    line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float]] | None = None
+    line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float | None]] | None = None
     bbmod_masks: int | list[int] = 0 # Not actually implemented yet lol
 
     def generate_clips(self, clip: vs.VideoNode) -> 'DescaleTarget':
@@ -74,7 +74,7 @@ class DescaleTarget(TargetVals):
         """
         self.kernel = Kernel.ensure_obj(self.kernel)
         self.input_clip = clip.std.SetFrameProp('Target', self.index + 1)
-        clip = depth(get_y(clip), 16)
+        bits, clip = get_depth(clip), get_y(clip)
         self.height = float(self.height)
         if self.height.is_integer():
             if not self.width:
@@ -118,7 +118,7 @@ class DescaleTarget(TargetVals):
             if self.do_post_double is not None:
                 self.line_mask = self.line_mask.std.Inflate()
 
-            self.line_mask = depth(self.line_mask, 16)
+            self.line_mask = depth(self.line_mask, bits)
             
         if self.credit_mask != False or self.credit_mask_thr <= 0:
             if not isinstance(self.credit_mask, vs.VideoNode):
@@ -128,7 +128,7 @@ class DescaleTarget(TargetVals):
                 self.credit_mask = iterate(self.credit_mask, core.std.Maximum, 2)
                 self.credit_mask = iterate(self.credit_mask, core.std.Inflate, 2 if self.do_post_double is None else 4)
             
-            self.credit_mask = depth(self.credit_mask, 16)
+            self.credit_mask = depth(self.credit_mask, bits)
         
         return self
     
@@ -150,7 +150,7 @@ class DescaleTarget(TargetVals):
         if self.descale == None or self.rescale == None:
             self.generate_clips(clip)
 
-        y = depth(get_y(clip), 16)
+        bits, y = get_depth(clip), get_y(clip)
         
         if isinstance(self.upscaler, Doubler):
             self.doubled = self.upscaler.double(self.descale)
@@ -169,34 +169,41 @@ class DescaleTarget(TargetVals):
         else:
             self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height)
 
-        self.upscale = depth(self.upscale, 16)
-        self.rescale = depth(self.rescale, 16)
+        self.upscale = depth(self.upscale, bits)
+        self.rescale = depth(self.rescale, bits)
 
         if self.line_mask != False:
             if isinstance(self.line_mask, Sequence):
                 if len(self.line_mask) < 4:
                     raise ValueError("DescaleTarget line_mask must contain an Edgemask, Downscaler, lthr and hthr if you passed a list.")
                 mask_fun = EdgeDetect.ensure_obj(self.line_mask[0])
-                mask = mask_fun.edgemask(self.doubled, self.line_mask[2], self.line_mask[3], planes=0)
+                if self.line_mask[2] is None:
+                    mask = mask_fun.edgemask(self.doubled, planes=0).std.Maximum().std.Inflate()
+                else:
+                    mask = mask_fun.edgemask(self.doubled, self.line_mask[2], self.line_mask[3], planes=0)
                 self.line_mask = Scaler.ensure_obj(self.line_mask[1]).scale(mask, clip.width, clip.height)
                 
+            if get_depth(self.line_mask) == 32:
+                self.line_mask = self.line_mask.std.Limiter()
             self.upscale = y.std.MaskedMerge(self.upscale, self.line_mask)
 
         if self.credit_mask != False or self.credit_mask_thr <= 0:
+            if get_depth(self.credit_mask) == 32:
+                self.credit_mask = self.credit_mask.std.Limiter()
             self.upscale = self.upscale.std.MaskedMerge(y, self.credit_mask)
 
-        self.upscale = depth(self.upscale, get_depth(clip))
+        self.upscale = depth(self.upscale, bits)
         self.upscale = self.upscale if clip.format.color_family == vs.GRAY else join(self.upscale, clip)
         return self.upscale if not chroma else join(depth(self.upscale, get_depth(chroma)), depth(chroma, get_depth(chroma)))
     
     def _return_creditmask(self) -> vs.VideoNode:
-        return core.std.BlankClip(self.input_clip, format=vs.GRAY16) if self.credit_mask == False else self.credit_mask
+        return core.std.BlankClip(self.input_clip) if self.credit_mask == False else self.credit_mask
     
     def _return_linemask(self) -> vs.VideoNode:
-        return core.std.BlankClip(self.input_clip, format=vs.GRAY16) if self.line_mask == False else self.line_mask
+        return core.std.BlankClip(self.input_clip) if self.line_mask == False else self.line_mask
     
     def _return_doubled(self) -> vs.VideoNode:
-        return core.std.BlankClip(self.input_clip, width=self.input_clip * 2, format=vs.GRAY16) if not self.doubled else self.doubled
+        return core.std.BlankClip(self.input_clip, width=self.input_clip * 2) if not self.doubled else self.doubled
     
 DT = DescaleTarget
 
@@ -218,8 +225,7 @@ class MixedRescale:
             out(rescaled.line_mask)
             ```
         """
-        clip = depth(src, 32)
-        y = get_y(clip)
+        y = get_y(src)
 
         for i, d in enumerate(targets):
             d.index = i
