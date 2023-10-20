@@ -99,10 +99,7 @@ class DescaleTarget(TargetVals):
             if self.fields is None:
                 self.shift_top = 0.0
             else:
-                self.shift_top = tuple(
-                    0.25 * int(self.width) / clip.height, 0.0,
-                    -0.25 * int(self.width) / clip.height, 0.0
-                )
+                self.shift_top = tuple(self._crossconv_shift(clip), -self._crossconv_shift(clip))
 
         self.shift_left = self.shift_left or 0.0
 
@@ -288,6 +285,9 @@ class DescaleTarget(TargetVals):
 
         self.descale = FieldBased.PROGRESSIVE.apply(self.descale)
         self.rescale = FieldBased.PROGRESSIVE.apply(self.rescale)
+
+    def _crossconv_shift(self, clip: vs.VideoNode) -> float:
+        return 0.25 * int(self.width) / clip.height
 
 DT = DescaleTarget
 
