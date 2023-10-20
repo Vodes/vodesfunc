@@ -99,7 +99,7 @@ class DescaleTarget(TargetVals):
             if self.fields is None:
                 self.shift_top = 0.0
             else:
-                self.shift_top = tuple(self._crossconv_shift(clip), -self._crossconv_shift(clip))
+                self.shift_top = self.crossconv_shift_calc(clip, int(self.height))
 
         self.shift_left = self.shift_left or 0.0
 
@@ -286,8 +286,18 @@ class DescaleTarget(TargetVals):
         self.descale = FieldBased.PROGRESSIVE.apply(self.descale)
         self.rescale = FieldBased.PROGRESSIVE.apply(self.rescale)
 
-    def _crossconv_shift(self, clip: vs.VideoNode) -> float:
-        return 0.25 * int(self.width) / clip.height
+    @staticmethod
+    def crossconv_shift_calc(clip: vs.VideoNode, native_height: int) -> tuple[float, float]:
+        """Calculate the shift for a regular cross-conversion."""
+        return tuple(
+            0.25 / (clip.height / (native_height / 2))
+            -0.25 / (clip.height / (native_height / 2))
+        )
+
+    @staticmethod
+    def crossconv_shift_calc_irregular(clip: vs.VideoNode, native_height: int) -> float:
+        """Calculate the shift for an irregular cross-conversion."""
+        return 0.25 / (clip.height / native_height)
 
 DT = DescaleTarget
 
