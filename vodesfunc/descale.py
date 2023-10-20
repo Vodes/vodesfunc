@@ -120,6 +120,7 @@ class DescaleTarget(TargetVals):
 
             self._descale_fields(clip)
             ref_y = self.rescale
+            self.line_mask = self.line_mask or False
         elif self.height.is_integer():
             self.descale = self.kernel.descale(clip, self.width, self.height, (self.shift_top, self.shift_left))
             self.rescale = self.kernel.scale(self.descale, clip.width, clip.height, (-self.shift_top, -self.shift_left))
