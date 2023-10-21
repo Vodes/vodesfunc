@@ -1,4 +1,4 @@
-from vstools import vs, core, get_w, get_y, depth, iterate, ColorRange, join, get_depth, FieldBased
+from vstools import vs, core, get_w, get_y, depth, iterate, ColorRange, join, get_depth, FieldBased, FieldBasedT
 from vskernels import Scaler, ScalerT, Kernel, KernelT, Catrom
 from vsmasktools import EdgeDetectT, EdgeDetect
 from typing import Callable, Sequence, Union
@@ -72,7 +72,7 @@ class DescaleTarget(TargetVals):
     credit_mask_thr: float = 0.04
     credit_mask_bh: bool = False
     line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float | None]] | None = None
-    fields: FieldBased | None = None
+    fields: FieldBasedT | None = None
     bbmod_masks: int | list[int] = 0 # Not actually implemented yet lol
 
     def __post__init__(self) -> None:
@@ -92,24 +92,16 @@ class DescaleTarget(TargetVals):
         bits, clip = get_depth(clip), get_y(clip)
         self.height = float(self.height)
 
+        fb = FieldBased.from_param(self.fields, self.generate_clips)
+        self.fields = fb if fb.is_inter else FieldBased.from_video(clip, func=self.generate_clips)
+
         if not self.width:
             self.width = float(self.height * clip.width / clip.height)
 
-        if self.shift_top is None:
-            if self.fields is None:
-                self.shift_top = 0.0
-            else:
-                self.shift_top = self.crossconv_shift_calc(clip, int(self.height))
-
+        self.shift_top = self.shift_top or 0.0
         self.shift_left = self.shift_left or 0.0
 
-        if self.fields is None:
-            if len(self.shift_top) > 1:
-                self.shift_top = self.shift_top[0]
-            if len(self.shift_left) > 1:
-                self.shift_left = self.shift_left[0]
-
-        if self.fields is not None:
+        if self.fields.is_inter:
             if not self.height.is_integer():
                 raise ValueError("`height` must be an integer if `fields` is not None, not float.")
             if not self.width.is_integer():
@@ -201,20 +193,6 @@ class DescaleTarget(TargetVals):
         if self.do_post_double is not None:
             self.doubled = self.do_post_double(self.doubled)
 
-        if isinstance(self.shift_top, tuple):
-            down_shift_top = self.shift_top[0] if self.shift_top[0] == self.shift_top[1] else 0.0
-        elif self.shift_top:
-            down_shift_top = self.shift_top
-        else:
-            down_shift_top = 0.0
-
-        if isinstance(self.shift_left, tuple):
-            down_shift_left = self.shift_left[0] if self.shift_left[0] == self.shift_left[1] else 0.0
-        elif self.shift_left:
-            down_shift_left = self.shift_left
-        else:
-            down_shift_left = 0.0
-
         self.downscaler = Scaler.ensure_obj(self.downscaler)
         if hasattr(self, 'frac_args'):
             # TODO: Figure out how to counteract shift during descaling (if we want to?)
@@ -222,7 +200,7 @@ class DescaleTarget(TargetVals):
             self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, **self.frac_args)
             self.upscale = self.upscale.std.CopyFrameProps(self.rescale)
         else:
-            self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, (down_shift_top, down_shift_left))
+            self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, (-self.shift_top, -self.shift_left))
 
         self.upscale = depth(self.upscale, bits)
         self.rescale = depth(self.rescale, bits)
@@ -261,38 +239,13 @@ class DescaleTarget(TargetVals):
         return core.std.BlankClip(self.input_clip, width=self.input_clip * 2) if not self.doubled else self.doubled
 
     def _descale_fields(self, clip: vs.VideoNode) -> None:
-        height = int(self.height / 2)
+        wclip = self.fields.apply(clip)
 
-        if isinstance(self.shift_top, tuple):
-            ff_top, sf_top = self.shift_top
-        else:
-            ff_top = sf_top = self.shift_top
-
-        if isinstance(self.shift_left, tuple):
-            ff_left, sf_left = self.shift_left
-        else:
-            ff_left = sf_left = self.shift_left
-
-        wclip = FieldBased.ensure_presence(clip, FieldBased.TFF, self._descale_fields)
-        wclip_sep = wclip.std.SeparateFields()
-
-        self.descale = core.std.Interleave([
-            self.kernel.descale(wclip_sep[0::2], self.width, height, (ff_top, ff_left)),
-            self.kernel.descale(wclip_sep[1::2], self.width, height, (sf_top, sf_left))
-        ]).std.DoubleWeave()[::2]
-
+        self.descale = self.kernel.descale(wclip, self.width, self.height)
         self.rescale = self.kernel.scale(self.descale, clip.width, clip.height)
 
         self.descale = FieldBased.PROGRESSIVE.apply(self.descale)
         self.rescale = FieldBased.PROGRESSIVE.apply(self.rescale)
-
-    @staticmethod
-    def crossconv_shift_calc(clip: vs.VideoNode, native_height: int) -> tuple[float, float]:
-        """Calculate the shift for a regular cross-conversion."""
-        return tuple(
-            0.25 / (clip.height / (native_height / 2))
-            -0.25 / (clip.height / (native_height / 2))
-        )
 
     @staticmethod
     def crossconv_shift_calc_irregular(clip: vs.VideoNode, native_height: int) -> float:
