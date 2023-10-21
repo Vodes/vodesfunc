@@ -51,7 +51,7 @@ class DescaleTarget(TargetVals):
                                 You can also pass a list containing edgemask function, scaler and thresholds to generate the mask on the doubled clip for potential better results.
                                 If None is passed to the first threshold then the mask won't be binarized. It will also run a Maximum and Inflate call on the mask.
                                 Example: line_mask=(KirschTCanny, Bilinear, 50 / 255, 150 / 255)
-        :param fields:          Per-field descaling. Must be a FieldBased object. For example, `fields=FieldBased.TFF`.
+        :param field_based:     Per-field descaling. Must be a FieldBased object. For example, `fields=FieldBased.TFF`.
                                 This indicates the order the fields get operated in, and whether it needs special attention.
                                 Defaults to checking the input clip for the frameprop.
         :param bbmod_masks:     Specify rows to be bbmod'ed for a clip to generate the masks on. Will probably be useful for the new border param in descale.
@@ -69,7 +69,7 @@ class DescaleTarget(TargetVals):
     credit_mask_thr: float = 0.04
     credit_mask_bh: bool = False
     line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float | None]] | None = None
-    fields: FieldBasedT | None = None
+    field_based: FieldBasedT | None = None
     bbmod_masks: int | list[int] = 0 # Not actually implemented yet lol
 
     def generate_clips(self, clip: vs.VideoNode) -> 'DescaleTarget':
@@ -83,12 +83,12 @@ class DescaleTarget(TargetVals):
         bits, clip = get_depth(clip), get_y(clip)
         self.height = float(self.height)
 
-        self.fields = FieldBased.from_param(self.fields or FieldBased.from_video(clip, True), self.generate_clips)
+        self.field_based = FieldBased.from_param(self.fields) or FieldBased.from_video(clip)
 
         if not self.width:
             self.width = float(self.height * clip.width / clip.height)
 
-        if self.fields.is_inter:
+        if self.field_based.is_inter:
             if not self.height.is_integer():
                 raise ValueError("`height` must be an integer if `fields` is not None, not float.")
             if not self.width.is_integer():
@@ -136,7 +136,7 @@ class DescaleTarget(TargetVals):
             if self.do_post_double is not None:
                 self.line_mask = self.line_mask.std.Inflate()
 
-            if self.fields.is_inter:
+            if self.field_based.is_inter:
                 self.line_mask = iterate(self.line_mask, core.std.Inflate, 3)
                 self.line_mask = iterate(self.line_mask, core.std.Maximum, 3)
 
@@ -229,7 +229,7 @@ class DescaleTarget(TargetVals):
         return core.std.BlankClip(self.input_clip, width=self.input_clip * 2) if not self.doubled else self.doubled
 
     def _descale_fields(self, clip: vs.VideoNode) -> None:
-        wclip = self.fields.apply(clip)
+        wclip = self.field_based.apply(clip)
 
         self.descale = self.kernel.descale(wclip, self.width, self.height)
         self.rescale = self.kernel.scale(self.descale, clip.width, clip.height)
