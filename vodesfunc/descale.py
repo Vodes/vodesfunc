@@ -92,8 +92,7 @@ class DescaleTarget(TargetVals):
         bits, clip = get_depth(clip), get_y(clip)
         self.height = float(self.height)
 
-        fb = FieldBased.from_param(self.fields, self.generate_clips)
-        self.fields = fb if fb.is_inter else FieldBased.from_video(clip, func=self.generate_clips)
+        self.fields = FieldBased.from_param(self.fields or FieldBased.from_video(clip), self.generate_clips)
 
         if not self.width:
             self.width = float(self.height * clip.width / clip.height)
