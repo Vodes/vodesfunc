@@ -54,8 +54,8 @@ class DescaleTarget(TargetVals):
                                 If None is passed to the first threshold then the mask won't be binarized. It will also run a Maximum and Inflate call on the mask.
                                 Example: line_mask=(KirschTCanny, Bilinear, 50 / 255, 150 / 255)
         :param fields:          Per-field descaling. Must be a FieldBased object. For example, `fields=FieldBased.TFF`.
-                                This indicates the order the fields get operated in. If FieldBased.PROGRESSIVE is passed,
-                                it defaults to None. Default=None.
+                                This indicates the order the fields get operated in, and whether it needs special attention.
+                                Defaults to checking the input clip for the frameprop.
         :param bbmod_masks:     Specify rows to be bbmod'ed for a clip to generate the masks on. Will probably be useful for the new border param in descale.
     """
     height: float
@@ -92,7 +92,7 @@ class DescaleTarget(TargetVals):
         bits, clip = get_depth(clip), get_y(clip)
         self.height = float(self.height)
 
-        self.fields = FieldBased.from_param(self.fields or FieldBased.from_video(clip), self.generate_clips)
+        self.fields = FieldBased.from_param(self.fields or FieldBased.from_video(clip, True), self.generate_clips)
 
         if not self.width:
             self.width = float(self.height * clip.width / clip.height)
