@@ -1,4 +1,4 @@
-from vstools import vs, core, get_w, get_y, depth, iterate, ColorRange, join, get_depth, FieldBased, FieldBasedT
+from vstools import vs, core, get_y, depth, iterate, ColorRange, join, get_depth, FieldBased, FieldBasedT
 from vskernels import Scaler, ScalerT, Kernel, KernelT, Catrom
 from vsmasktools import EdgeDetectT, EdgeDetect
 from typing import Callable, Sequence, Union
@@ -108,7 +108,6 @@ class DescaleTarget(TargetVals):
 
             self._descale_fields(clip)
             ref_y = self.rescale
-            self.line_mask = self.line_mask or False
         elif self.height.is_integer():
             self.descale = self.kernel.descale(clip, self.width, self.height, (self.shift_top, self.shift_left))
             self.rescale = self.kernel.scale(self.descale, clip.width, clip.height, (-self.shift_top, -self.shift_left))
@@ -148,6 +147,10 @@ class DescaleTarget(TargetVals):
 
             if self.do_post_double is not None:
                 self.line_mask = self.line_mask.std.Inflate()
+
+            if self.fields.is_inter:
+                self.line_mask = iterate(self.line_mask, core.std.Inflate, 3)
+                self.line_mask = iterate(self.line_mask, core.std.Maximum, 3)
 
             self.line_mask = depth(self.line_mask, bits)
 
