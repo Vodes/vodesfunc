@@ -51,7 +51,7 @@ class DescaleTarget(TargetVals):
                                 You can also pass a list containing edgemask function, scaler and thresholds to generate the mask on the doubled clip for potential better results.
                                 If None is passed to the first threshold then the mask won't be binarized. It will also run a Maximum and Inflate call on the mask.
                                 Example: line_mask=(KirschTCanny, Bilinear, 50 / 255, 150 / 255)
-        :param field_based:     Per-field descaling. Must be a FieldBased object. For example, `fields=FieldBased.TFF`.
+        :param field_based:     Per-field descaling. Must be a FieldBased object. For example, `field_based=FieldBased.TFF`.
                                 This indicates the order the fields get operated in, and whether it needs special attention.
                                 Defaults to checking the input clip for the frameprop.
         :param bbmod_masks:     Specify rows to be bbmod'ed for a clip to generate the masks on. Will probably be useful for the new border param in descale.
@@ -83,16 +83,16 @@ class DescaleTarget(TargetVals):
         bits, clip = get_depth(clip), get_y(clip)
         self.height = float(self.height)
 
-        self.field_based = FieldBased.from_param(self.fields) or FieldBased.from_video(clip)
+        self.field_based = FieldBased.from_param(self.field_based) or FieldBased.from_video(clip)
 
         if not self.width:
             self.width = float(self.height * clip.width / clip.height)
 
         if self.field_based.is_inter:
             if not self.height.is_integer():
-                raise ValueError("`height` must be an integer if `fields` is not None, not float.")
+                raise ValueError("DescaleTarget: `height` must be an integer if `field_based` is not None, not float.")
             if not self.width.is_integer():
-                raise ValueError("`width` must be an integer if `fields` is not None, not float.")
+                raise ValueError("DescaleTarget: `width` must be an integer if `field_based` is not None, not float.")
 
             self._descale_fields(clip)
             ref_y = self.rescale
@@ -198,7 +198,7 @@ class DescaleTarget(TargetVals):
         if self.line_mask != False:
             if isinstance(self.line_mask, Sequence):
                 if len(self.line_mask) < 4:
-                    raise ValueError("DescaleTarget line_mask must contain an Edgemask, Downscaler, lthr and hthr if you passed a list.")
+                    raise ValueError("DescaleTarget: line_mask must contain an Edgemask, Downscaler, lthr and hthr if you passed a list.")
                 mask_fun = EdgeDetect.ensure_obj(self.line_mask[0])
                 if self.line_mask[2] is None:
                     mask = mask_fun.edgemask(self.doubled, planes=0).std.Maximum().std.Inflate()
