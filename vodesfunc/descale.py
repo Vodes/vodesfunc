@@ -42,13 +42,11 @@ class DescaleTarget(TargetVals):
         :param base_height:     Needed for fractional descales.
         :param width:           Width to be descaled to. (will be calculated if None)
         :param base_width:      Needed for fractional descales. (will be calculated if None)
-        :param shift_top:       Top-wards shifting to perform during the rescaling. If `field` is set and `None` is passed,
-                                it will automatically calculate the shift, but it may do so incorrectly, so double-check yourself.
-        :param shift_left:      Left-wards shifting to perform during the rescaling. Defaults to 0.0.
+        :param shift:           Shifts to apply during the descaling and reupscaling.
         :param do_post_double:  A function that's called on the doubled clip. Can be used to do sensitive processing on a bigger clip. (e. g. Dehaloing)
         :param credit_mask:     Can be used to pass a mask that'll be used or False to disable error masking.
         :param credit_mask_thr: The error threshold of the automatically generated credit mask.
-        :param credit_mask_bh:  Generates an error mask based on a descale using the baseheight. For some reason had better results with this on some shows.
+        :param credit_mask_bh:  Generates an error mask based on a descale using the base_height. For some reason had better results with this on some shows.
         :param line_mask:       Can be used to pass a mask that'll be used or False to disable line masking.
                                 You can also pass a list containing edgemask function, scaler and thresholds to generate the mask on the doubled clip for potential better results.
                                 If None is passed to the first threshold then the mask won't be binarized. It will also run a Maximum and Inflate call on the mask.
@@ -65,8 +63,7 @@ class DescaleTarget(TargetVals):
     base_height: int | None = None
     width: float | None = None
     base_width: int | None = None
-    shift_top: int | tuple[int, int] | None = None
-    shift_left: int | tuple[int, int] | None = None
+    shift: tuple[int, int] = (0, 0)
     do_post_double: Callable[[vs.VideoNode], vs.VideoNode] | None = None
     credit_mask: vs.VideoNode | bool | None = None
     credit_mask_thr: float = 0.04
@@ -74,12 +71,6 @@ class DescaleTarget(TargetVals):
     line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float | None]] | None = None
     fields: FieldBasedT | None = None
     bbmod_masks: int | list[int] = 0 # Not actually implemented yet lol
-
-    def __post__init__(self) -> None:
-        if self.fields is None:
-            return
-        elif not self.fields.is_inter:
-            self.fields = None
 
     def generate_clips(self, clip: vs.VideoNode) -> 'DescaleTarget':
         """
@@ -97,9 +88,6 @@ class DescaleTarget(TargetVals):
         if not self.width:
             self.width = float(self.height * clip.width / clip.height)
 
-        self.shift_top = self.shift_top or 0.0
-        self.shift_left = self.shift_left or 0.0
-
         if self.fields.is_inter:
             if not self.height.is_integer():
                 raise ValueError("`height` must be an integer if `fields` is not None, not float.")
@@ -109,8 +97,8 @@ class DescaleTarget(TargetVals):
             self._descale_fields(clip)
             ref_y = self.rescale
         elif self.height.is_integer():
-            self.descale = self.kernel.descale(clip, self.width, self.height, (self.shift_top, self.shift_left))
-            self.rescale = self.kernel.scale(self.descale, clip.width, clip.height, (-self.shift_top, -self.shift_left))
+            self.descale = self.kernel.descale(clip, self.width, self.height, self.shift)
+            self.rescale = self.kernel.scale(self.descale, clip.width, clip.height, self.shift)
             ref_y = self.rescale
         else:
             if self.base_height is None:
@@ -197,12 +185,12 @@ class DescaleTarget(TargetVals):
 
         self.downscaler = Scaler.ensure_obj(self.downscaler)
         if hasattr(self, 'frac_args'):
-            # TODO: Figure out how to counteract shift during descaling (if we want to?)
+            # TODO: Figure out how to counteract shift during descaling (if we want to?), maybe additive?
             self.frac_args.update({key: value * 2 for (key, value) in self.frac_args.items()})
             self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, **self.frac_args)
             self.upscale = self.upscale.std.CopyFrameProps(self.rescale)
         else:
-            self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, (-self.shift_top, -self.shift_left))
+            self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, tuple(-sh for sh in self.shift))
 
         self.upscale = depth(self.upscale, bits)
         self.rescale = depth(self.rescale, bits)
