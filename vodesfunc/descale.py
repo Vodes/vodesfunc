@@ -1,6 +1,7 @@
 from vstools import vs, core, get_y, depth, iterate, ColorRange, join, get_depth, FieldBased, FieldBasedT
 from vskernels import Scaler, ScalerT, Kernel, KernelT, Catrom
 from vsmasktools import EdgeDetectT, EdgeDetect
+from vsrgtools import gauss_blur
 from typing import Callable, Sequence, Union
 from math import floor
 from dataclasses import dataclass
@@ -139,6 +140,7 @@ class DescaleTarget(TargetVals):
             if self.do_post_double is not None:
                 self.line_mask = self.line_mask.std.Inflate()
 
+            self.line_mask = gauss_blur(self.line_mask, 1.5)
 
             self.line_mask = depth(self.line_mask, bits)
 
