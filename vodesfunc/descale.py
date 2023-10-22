@@ -90,12 +90,15 @@ class DescaleTarget(TargetVals):
 
         if self.field_based.is_inter:
             if not self.height.is_integer():
-                raise ValueError("DescaleTarget: `height` must be an integer if `field_based` is not None, not float.")
+                raise ValueError("DescaleTarget: `height` must be an integer when descaling an interlaced clip, not float.")
             if not self.width.is_integer():
-                raise ValueError("DescaleTarget: `width` must be an integer if `field_based` is not None, not float.")
+                raise ValueError("DescaleTarget: `width` must be an integer when descaling an interlaced clip, not float.")
 
             self._descale_fields(clip)
+
             ref_y = self.rescale
+            clip = FieldBased.PROGRESSIVE.apply(clip)
+            self.line_mask = self.line_mask or False
         elif self.height.is_integer():
             self.descale = self.kernel.descale(clip, self.width, self.height, self.shift)
             self.rescale = self.kernel.scale(self.descale, clip.width, clip.height, self.shift)
@@ -135,10 +138,6 @@ class DescaleTarget(TargetVals):
 
             if self.do_post_double is not None:
                 self.line_mask = self.line_mask.std.Inflate()
-
-            if self.field_based.is_inter:
-                self.line_mask = iterate(self.line_mask, core.std.Inflate, 3)
-                self.line_mask = iterate(self.line_mask, core.std.Maximum, 3)
 
             self.line_mask = depth(self.line_mask, bits)
 
