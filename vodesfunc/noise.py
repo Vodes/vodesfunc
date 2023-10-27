@@ -5,6 +5,7 @@ from vskernels import Scaler, Lanczos, BicubicDidee
 __all__ = ["adaptive_grain", "grain", "ntype4"]
 
 ntype4 = {"type": 2, "scale": 0.7, "scaler": BicubicDidee()}
+itype4 = {"type": 2, "size": 0.769, "sharp": BicubicDidee(), "protect_chroma": True, "fade_limits": True}
 
 
 def adaptive_grain(
