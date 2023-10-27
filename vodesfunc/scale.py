@@ -11,7 +11,6 @@ __all__: list[str] = [
     "Clamped_Doubler",
     "Shader_Doubler",
     "Waifu2x_Doubler",
-    "vodes_rescale",
     "LinearScaler",
     "Lanczos_PreSS",
     "SigmoidScaler",
