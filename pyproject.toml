@@ -1,0 +1,35 @@
+
+[project]
+name = "vodesfunc"
+version = "1.4.0"
+description = "Vodes' random Vapoursynth Functions."
+authors = [{ name = "Vodes", email = "vodes.imp@gmail.com" }]
+dependencies = [
+    "Vapoursynth>=61",
+    "vsscale>=1.0.1",
+    "vsrgtools>=1.3.0",
+    "vskernels>=1.2.0",
+    "vstools>=1.6.2",
+    "vsmasktools>=1.1.0",
+]
+classifiers = [
+    "Natural Language :: English",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3.10",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+    "Topic :: Multimedia :: Video",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = { text = "MPL 2.0" }
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project.urls]
+"Source Code" = "https://github.com/Vodes/vodesfunc"
+"Contact" = "https://discord.gg/Kf94Nv6WVN"
