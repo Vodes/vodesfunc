@@ -209,6 +209,9 @@ class Waifu2x_Doubler(Doubler):
 
         self.kwargs = {"num_streams": num_streams, "fp16": fp16}
 
+        if "backend" in kwargs.keys():
+            cuda = False
+
         # Partially stolen from setsu but removed useless stuff that is default in mlrt already and added version checks
         if cuda is None:
             nv = get_nvidia_version()
@@ -254,11 +257,15 @@ class Waifu2x_Doubler(Doubler):
         self.kwargs.update(kwargs)
 
         if cuda is False:
-            if hasattr(core, "ncnn"):
-                self.backend = Backend.NCNN_VK(**self.kwargs)
+            backend = kwargs.pop("backend", None)
+            if backend and isinstance(backend, Backend):
+                self.backend = backend
             else:
-                self.kwargs.pop("device_id")
-                self.backend = Backend.ORT_CPU(**self.kwargs) if hasattr(core, "ort") else Backend.OV_CPU(**self.kwargs)
+                if hasattr(core, "ncnn"):
+                    self.backend = Backend.NCNN_VK(**self.kwargs)
+                else:
+                    self.kwargs.pop("device_id")
+                    self.backend = Backend.ORT_CPU(**self.kwargs) if hasattr(core, "ort") else Backend.OV_CPU(**self.kwargs)
         elif cuda is True:
             self.backend = Backend.ORT_CUDA(**self.kwargs) if hasattr(core, "ort") else Backend.OV_GPU(**self.kwargs)
         else:
