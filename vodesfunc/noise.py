@@ -1,11 +1,11 @@
 from typing import Sequence, Callable
 from vstools import vs, core, get_depth, scale_value, split, normalize_seq, get_neutral_value, get_peak_value, mod4
-from vskernels import Scaler, Lanczos, BicubicDidee
+from vskernels import Scaler, Lanczos, Bicubic
 
 __all__ = ["adaptive_grain", "grain", "ntype4"]
 
-ntype4 = {"type": 2, "scale": 0.7, "scaler": BicubicDidee()}
-itype4 = {"type": 2, "size": 0.769, "sharp": BicubicDidee(), "protect_chroma": True, "fade_limits": True}
+ntype4 = {"type": 2, "scale": 0.7, "scaler": Bicubic(b=-1 / 2, c=1 / 4)}
+itype4 = {"type": 2, "size": 0.769, "sharp": Bicubic(b=-1 / 2, c=1 / 4), "protect_chroma": True, "fade_limits": True}
 
 
 def adaptive_grain(
