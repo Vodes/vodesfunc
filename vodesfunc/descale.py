@@ -113,7 +113,6 @@ class DescaleTarget(TargetVals):
                 raise ValueError("DescaleTarget: Your base_height has to be an integer.")
             if self.base_height < self.height:
                 raise ValueError("DescaleTarget: Your base_height has to be bigger than your height.")
-            self.frac_args = get_args(clip, self.base_height, self.height, self.base_width)
             self.frac_args = get_args(clip, self.base_height, self.height, self.base_width, self.shift)
             self.descale = self.kernel.descale(clip, **self.frac_args)  \
                 .std.CopyFrameProps(clip).std.SetFrameProp('Descale', self.index + 1)
@@ -193,7 +192,7 @@ class DescaleTarget(TargetVals):
             self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, **self.frac_args)
             self.upscale = self.upscale.std.CopyFrameProps(self.rescale)
         else:
-            self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, tuple(-sh for sh in self.shift))
+            self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, self.shift)
 
         self.upscale = depth(self.upscale, bits)
         self.rescale = depth(self.rescale, bits)
