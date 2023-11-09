@@ -9,7 +9,7 @@ from .scale import Doubler, NNEDI_Doubler
 
 __all__ = ['DescaleTarget', 'MixedRescale', 'DT']
 
-def get_args(clip: vs.VideoNode, base_height: int, height: float, base_width: float = None, shift: tuple[float, float] (0.0, 0.0)):
+def get_args(clip: vs.VideoNode, base_height: int, height: float, base_width: float = None, shift: tuple[float, float] = (0.0, 0.0)):
     base_height = float(base_height)
     src_width = height * clip.width / clip.height
     if not base_width:
