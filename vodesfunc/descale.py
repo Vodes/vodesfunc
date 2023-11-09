@@ -9,16 +9,19 @@ from .scale import Doubler, NNEDI_Doubler
 
 __all__ = ['DescaleTarget', 'MixedRescale', 'DT']
 
-def get_args(clip: vs.VideoNode, base_height: int, height: float, base_width: float = None):
+def get_args(clip: vs.VideoNode, base_height: int, height: float, base_width: float = None, shift: tuple[float, float] (0.0, 0.0)):
     base_height = float(base_height)
     src_width = height * clip.width / clip.height
     if not base_width:
         base_width = clip.width
     cropped_width = base_width - 2 * floor((base_width - src_width) / 2)
     cropped_height = base_height - 2 * floor((base_height - height) / 2)
-    fractional_args = dict(height = cropped_height, width = cropped_width,
-        src_width = src_width, src_height = height, src_left = (cropped_width - src_width) / 2,
-        src_top = (cropped_height - height) / 2)
+    fractional_args = dict(
+        height = cropped_height, width = cropped_width,
+        src_width = src_width, src_height = height,
+        src_left = (cropped_width - src_width) / 2 + shift[1],
+        src_top = (cropped_height - height) / 2 + shift[0]
+    )
     return fractional_args
 
 class TargetVals():
@@ -111,6 +114,7 @@ class DescaleTarget(TargetVals):
             if self.base_height < self.height:
                 raise ValueError("DescaleTarget: Your base_height has to be bigger than your height.")
             self.frac_args = get_args(clip, self.base_height, self.height, self.base_width)
+            self.frac_args = get_args(clip, self.base_height, self.height, self.base_width, self.shift)
             self.descale = self.kernel.descale(clip, **self.frac_args)  \
                 .std.CopyFrameProps(clip).std.SetFrameProp('Descale', self.index + 1)
             self.frac_args.pop('width')
