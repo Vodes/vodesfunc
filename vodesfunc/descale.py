@@ -1,9 +1,9 @@
-from vstools import vs, core, get_y, depth, iterate, ColorRange, join, get_depth, FieldBased, FieldBasedT
-from vskernels import Scaler, ScalerT, Kernel, KernelT, Catrom
-from vsmasktools import EdgeDetectT, EdgeDetect
-from typing import Any, Callable, Sequence, Union
 from math import floor
-from dataclasses import dataclass
+from typing import Callable, Sequence, Union
+from vskernels import Catrom, Kernel, KernelT, Scaler, ScalerT
+from vsmasktools import EdgeDetect, EdgeDetectT, KirschTCanny, squaremask
+from vstools import (ColorRange, FieldBased, FieldBasedT, core, depth,
+                     get_depth, get_y, iterate, join, vs)
 
 from .scale import Doubler, NNEDI_Doubler
 
@@ -132,22 +132,23 @@ class DescaleTarget(TargetVals):
                 ref_y = self.rescale
 
         if self.line_mask != False and not isinstance(self.line_mask, Sequence):
-            if not isinstance(self.line_mask, vs.VideoNode):
-                try:
-                    from vsmasktools.edge import KirschTCanny
-                    try:
-                        # Scaling was changed so I abuse the new param to check if its the newer version
-                        self.line_mask = KirschTCanny().edgemask(clip, lthr=80 / 255, hthr=150 / 255, planes=(0, True))
-                    except:
-                        self.line_mask = KirschTCanny().edgemask(clip, lthr=80 << 8, hthr=150 << 8)
-                except:
-                    from vsmask.edge import KirschTCanny
-                    self.line_mask = KirschTCanny().edgemask(clip, lthr=80 << 8, hthr=150 << 8)
+            try:
+                # Scaling was changed so I abuse the new param to check if its the newer version
+                self.line_mask = KirschTCanny().edgemask(clip, lthr=80 / 255, hthr=150 / 255, planes=(0, True))
+            except:
+                self.line_mask = KirschTCanny().edgemask(clip, lthr=80 << 8, hthr=150 << 8)
 
             if self.do_post_double is not None:
                 self.line_mask = self.line_mask.std.Inflate()
 
             self.line_mask = depth(self.line_mask, bits)
+
+        # Separated so it will always be applied and the user won't have to worry about the border_handling edgefixing.
+        if self.line_mask and self.border_handling:
+            self.line_mask = core.std.Expr([
+                self.line_mask,
+                squaremask(self.line_mask, clip.width - 4, clip.height - 4, 2, 2, True),
+            ], "x y max")
 
         if self.credit_mask != False or self.credit_mask_thr <= 0:
             if not isinstance(self.credit_mask, vs.VideoNode):
