@@ -1,7 +1,7 @@
 from vstools import vs, core, get_y, depth, iterate, ColorRange, join, get_depth, FieldBased, FieldBasedT
 from vskernels import Scaler, ScalerT, Kernel, KernelT, Catrom
 from vsmasktools import EdgeDetectT, EdgeDetect
-from typing import Callable, Sequence, Union
+from typing import Any, Callable, Sequence, Union
 from math import floor
 from dataclasses import dataclass
 
@@ -54,6 +54,11 @@ class DescaleTarget(TargetVals):
         :param field_based:     Per-field descaling. Must be a FieldBased object. For example, `field_based=FieldBased.TFF`.
                                 This indicates the order the fields get operated in, and whether it needs special attention.
                                 Defaults to checking the input clip for the frameprop.
+        :param border_handling: Adjust the way the clip is padded internally during the scaling process. Accepted values are:
+                                    0: Assume the image was resized with mirror padding.
+                                    1: Assume the image was resized with zero padding.
+                                    2: Assume the image was resized with extend padding, where the outermost row was extended infinitely far.
+                                Defaults to 0.
         :param bbmod_masks:     Specify rows to be bbmod'ed for a clip to generate the masks on. Will probably be useful for the new border param in descale.
     """
     height: float
@@ -70,6 +75,7 @@ class DescaleTarget(TargetVals):
     credit_mask_bh: bool = False
     line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float | None]] | None = None
     field_based: FieldBasedT | None = None
+    border_handling: int = 0
     bbmod_masks: int | list[int] = 0 # Not actually implemented yet lol
 
     def generate_clips(self, clip: vs.VideoNode) -> 'DescaleTarget':
@@ -84,6 +90,8 @@ class DescaleTarget(TargetVals):
         self.height = float(self.height)
 
         self.field_based = FieldBased.from_param(self.field_based) or FieldBased.from_video(clip)
+
+        self.border_handling = self.kernel.kwargs.pop("border_handling", self.border_handling)
 
         if not self.width:
             self.width = float(self.height * clip.width / clip.height)
@@ -100,7 +108,7 @@ class DescaleTarget(TargetVals):
             clip = FieldBased.PROGRESSIVE.apply(clip)
             self.line_mask = self.line_mask or False
         elif self.height.is_integer():
-            self.descale = self.kernel.descale(clip, self.width, self.height, self.shift)
+            self.descale = self.kernel.descale(clip, self.width, self.height, self.shift, border_handling=self.border_handling)
             self.rescale = self.kernel.scale(self.descale, clip.width, clip.height, self.shift)
             ref_y = self.rescale
         else:
@@ -111,14 +119,14 @@ class DescaleTarget(TargetVals):
             if self.base_height < self.height:
                 raise ValueError("DescaleTarget: Your base_height has to be bigger than your height.")
             self.frac_args = get_args(clip, self.base_height, self.height, self.base_width)
-            self.descale = self.kernel.descale(clip, **self.frac_args)  \
+            self.descale = self.kernel.descale(clip, **self.frac_args, border_handling=self.border_handling)  \
                 .std.CopyFrameProps(clip).std.SetFrameProp('Descale', self.index + 1)
             self.frac_args.pop('width')
             self.frac_args.pop('height')
             self.rescale = self.kernel.scale(self.descale, clip.width, clip.height, **self.frac_args) \
                 .std.CopyFrameProps(clip).std.SetFrameProp('Rescale', self.index + 1)
             if self.credit_mask_bh:
-                base_height_desc = self.kernel.descale(clip, self.base_height * (clip.width / clip.height), self.base_height)
+                base_height_desc = self.kernel.descale(clip, self.base_height * (clip.width / clip.height), self.base_height, border_handling=self.border_handling)
                 ref_y = self.kernel.scale(base_height_desc, clip.width, clip.height)
             else:
                 ref_y = self.rescale
@@ -230,7 +238,7 @@ class DescaleTarget(TargetVals):
     def _descale_fields(self, clip: vs.VideoNode) -> None:
         wclip = self.field_based.apply(clip)
 
-        self.descale = self.kernel.descale(wclip, self.width, self.height)
+        self.descale = self.kernel.descale(wclip, self.width, self.height, border_handling=self.border_handling)
         self.rescale = self.kernel.scale(self.descale, clip.width, clip.height)
 
         self.descale = FieldBased.PROGRESSIVE.apply(self.descale)
