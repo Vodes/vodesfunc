@@ -9,7 +9,7 @@ from .scale import Doubler, NNEDI_Doubler
 __all__ = ["DescaleTarget", "MixedRescale", "DT"]
 
 
-def get_args(clip: vs.VideoNode, base_height: int, height: float, base_width: float = None):
+def get_args(clip: vs.VideoNode, base_height: int, height: float, base_width: float = None, shift: tuple[float, float] = (0.0, 0.0)):
     base_height = float(base_height)
     src_width = height * clip.width / clip.height
     if not base_width:
@@ -21,8 +21,8 @@ def get_args(clip: vs.VideoNode, base_height: int, height: float, base_width: fl
         width=cropped_width,
         src_width=src_width,
         src_height=height,
-        src_left=(cropped_width - src_width) / 2,
-        src_top=(cropped_height - height) / 2,
+        src_left=(cropped_width - src_width) / 2 + shift[1],
+        src_top=(cropped_height - height) / 2 + shift[0],
     )
     return fractional_args
 
@@ -126,7 +126,7 @@ class DescaleTarget(TargetVals):
                 raise ValueError("DescaleTarget: Your base_height has to be an integer.")
             if self.base_height < self.height:
                 raise ValueError("DescaleTarget: Your base_height has to be bigger than your height.")
-            self.frac_args = get_args(clip, self.base_height, self.height, self.base_width)
+            self.frac_args = get_args(clip, self.base_height, self.height, self.base_width, self.shift)
             self.descale = (
                 self.kernel.descale(clip, **self.frac_args, border_handling=self.border_handling)
                 .std.CopyFrameProps(clip)
@@ -217,7 +217,7 @@ class DescaleTarget(TargetVals):
             self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, **self.frac_args)
             self.upscale = self.upscale.std.CopyFrameProps(self.rescale)
         else:
-            self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, tuple(-sh for sh in self.shift))
+            self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, self.shift)
 
         self.upscale = depth(self.upscale, bits)
         self.rescale = depth(self.rescale, bits)
