@@ -1,8 +1,9 @@
-from math import floor
+from vstools import vs, core, get_y, depth, iterate, ColorRange, join, get_depth, FieldBased, FieldBasedT
+from vskernels import Scaler, ScalerT, Kernel, KernelT, Catrom
+from vsmasktools import EdgeDetectT, EdgeDetect, KirschTCanny, squaremask
 from typing import Callable, Sequence, Union
-from vskernels import Catrom, Kernel, KernelT, Scaler, ScalerT
-from vsmasktools import EdgeDetect, EdgeDetectT, KirschTCanny, squaremask
-from vstools import ColorRange, FieldBased, FieldBasedT, core, depth, get_depth, get_y, iterate, join, vs
+from math import floor
+from dataclasses import dataclass
 
 from .scale import Doubler, NNEDI_Doubler
 
