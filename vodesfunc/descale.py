@@ -162,12 +162,23 @@ class DescaleTarget(TargetVals):
 
         # Separated so it will always be applied and the user won't have to worry about the border_handling edgefixing.
         if self.line_mask and self.border_handling:
+            try:
+                bord_rad = self.kernel.kernel_radius
+            except (AttributeError, NotImplementedError):
+                bord_rad = 2
+
+            # Expands border mask radii based on the scale factor. Only really relevant for factors ~2.0.
+            # Reduce by a bit more than 1 to stop frac ~720p resolutions from needlessly increasing the radius.
+            bord_rad += round(clip.height / self.height - 1 - 0.025)
+
             self.line_mask = core.std.Expr(
                 [
                     self.line_mask,
-                    squaremask(self.line_mask, clip.width - 4, clip.height - 4, 2, 2, True),
-                ],
-                "x y max",
+                    squaremask(
+                        self.line_mask, clip.width - bord_rad * 2, clip.height - bord_rad * 2,
+                        bord_rad, bord_rad, invert=True
+                    ),
+                ], "x y max"
             )
 
         if self.credit_mask != False or self.credit_mask_thr <= 0:
