@@ -173,13 +173,6 @@ class DescaleTarget(TargetVals):
 
             self.credit_mask = depth(self.credit_mask, bits).std.Limiter()
 
-        # Separated so it will always be applied and the user won't have to worry about the border_handling edgefixing.
-        if self.line_mask and self.border_handling:
-            self.line_mask = core.std.Expr([self.line_mask, self._bord_mask], "x y max")
-
-        if self.credit_mask and self.border_handling:
-            self.credit_mask = core.std.Expr([self.credit_mask, self._bord_mask], "x y -")
-
         return self
 
     def get_diff(self, clip: vs.VideoNode) -> vs.VideoNode:
@@ -223,6 +216,9 @@ class DescaleTarget(TargetVals):
         self.upscale = depth(self.upscale, bits)
         self.rescale = depth(self.rescale, bits)
 
+        if self.border_handling:
+            _up_bord = self.upscale
+
         if self.line_mask != False:
             if isinstance(self.line_mask, Sequence):
                 if len(self.line_mask) < 4:
@@ -238,6 +234,10 @@ class DescaleTarget(TargetVals):
 
         if self.credit_mask != False or self.credit_mask_thr <= 0:
             self.upscale = self.upscale.std.MaskedMerge(y, self.credit_mask)
+
+        if self.border_handling:
+            self.upscale = self.upscale.std.MaskedMerge(_up_bord, self._bord_mask)
+            del _up_bord
 
         self.upscale = depth(self.upscale, bits)
         self.upscale = self.upscale if clip.format.color_family == vs.GRAY else join(self.upscale, clip)
@@ -280,11 +280,8 @@ class DescaleTarget(TargetVals):
         # Reduce by a bit more than 1 to stop frac ~720p resolutions from needlessly increasing the radius.
         bord_rad += round(clip.height / self.height - 1 - 0.025)
 
-        same_x = self.width == clip.width
-        same_y = self.height == clip.height
-
-        offset_x = 0 if same_x else bord_rad
-        offset_y = 0 if same_y else bord_rad
+        offset_x = 0 if self.width == clip.width else bord_rad
+        offset_y = 0 if self.height == clip.height else bord_rad
 
         size_x = clip.width - offset_x * 2
         size_y = clip.height - offset_y * 2
