@@ -102,6 +102,9 @@ class DescaleTarget(TargetVals):
 
         self.border_handling = self.kernel.kwargs.pop("border_handling", self.border_handling)
 
+        if self.border_handling:
+            self._set_bord_mask(clip)
+
         if not self.width:
             self.width = float(self.height * clip.width / clip.height)
 
@@ -158,28 +161,7 @@ class DescaleTarget(TargetVals):
             if self.do_post_double is not None:
                 self.line_mask = self.line_mask.std.Inflate()
 
-            self.line_mask = depth(self.line_mask, bits)
-
-        # Separated so it will always be applied and the user won't have to worry about the border_handling edgefixing.
-        if self.line_mask and self.border_handling:
-            try:
-                bord_rad = self.kernel.kernel_radius
-            except (AttributeError, NotImplementedError):
-                bord_rad = 2
-
-            # Expands border mask radii based on the scale factor. Only really relevant for factors ~2.0.
-            # Reduce by a bit more than 1 to stop frac ~720p resolutions from needlessly increasing the radius.
-            bord_rad += round(clip.height / self.height - 1 - 0.025)
-
-            self.line_mask = core.std.Expr(
-                [
-                    self.line_mask,
-                    squaremask(
-                        self.line_mask, clip.width - bord_rad * 2, clip.height - bord_rad * 2,
-                        bord_rad, bord_rad, invert=True
-                    ),
-                ], "x y max"
-            )
+            self.line_mask = depth(self.line_mask, bits).std.Limiter()
 
         if self.credit_mask != False or self.credit_mask_thr <= 0:
             if not isinstance(self.credit_mask, vs.VideoNode):
@@ -189,7 +171,14 @@ class DescaleTarget(TargetVals):
                 self.credit_mask = iterate(self.credit_mask, core.std.Maximum, 2)
                 self.credit_mask = iterate(self.credit_mask, core.std.Inflate, 2 if self.do_post_double is None else 4)
 
-            self.credit_mask = depth(self.credit_mask, bits)
+            self.credit_mask = depth(self.credit_mask, bits).std.Limiter()
+
+        # Separated so it will always be applied and the user won't have to worry about the border_handling edgefixing.
+        if self.line_mask and self.border_handling:
+            self.line_mask = core.std.Expr([self.line_mask, self._bord_mask], "x y max")
+
+        if self.credit_mask and self.border_handling:
+            self.credit_mask = core.std.Expr([self.credit_mask, self._bord_mask], "x y -")
 
         return self
 
@@ -245,13 +234,9 @@ class DescaleTarget(TargetVals):
                     mask = mask_fun.edgemask(self.doubled, self.line_mask[2], self.line_mask[3], planes=0)
                 self.line_mask = Scaler.ensure_obj(self.line_mask[1]).scale(mask, clip.width, clip.height)
 
-            if get_depth(self.line_mask) == 32:
-                self.line_mask = self.line_mask.std.Limiter()
             self.upscale = y.std.MaskedMerge(self.upscale, self.line_mask)
 
         if self.credit_mask != False or self.credit_mask_thr <= 0:
-            if get_depth(self.credit_mask) == 32:
-                self.credit_mask = self.credit_mask.std.Limiter()
             self.upscale = self.upscale.std.MaskedMerge(y, self.credit_mask)
 
         self.upscale = depth(self.upscale, bits)
@@ -263,6 +248,9 @@ class DescaleTarget(TargetVals):
 
     def _return_linemask(self) -> vs.VideoNode:
         return core.std.BlankClip(self.input_clip) if self.line_mask == False else self.line_mask
+
+    def _return_bordermask(self) -> vs.VideoNode:
+        return core.std.BlankClip(self.input_clip) if not hasattr(self, "_bord_mask") else self._bord_mask
 
     def _return_doubled(self) -> vs.VideoNode:
         return core.std.BlankClip(self.input_clip, width=self.input_clip * 2) if not self.doubled else self.doubled
@@ -280,6 +268,28 @@ class DescaleTarget(TargetVals):
     def crossconv_shift_calc_irregular(clip: vs.VideoNode, native_height: int) -> float:
         """Calculate the shift for an irregular cross-conversion."""
         return 0.25 / (clip.height / native_height)
+
+    def _set_bord_mask(self, clip: vs.VideoNode) -> vs.VideoNode:
+        """Set an attribute for a border mask for border_handling."""
+        try:
+            bord_rad = self.kernel.kernel_radius
+        except (AttributeError, NotImplementedError):
+            bord_rad = 2
+
+        # Expands border mask radii based on the scale factor. Only really relevant for factors ~2.0.
+        # Reduce by a bit more than 1 to stop frac ~720p resolutions from needlessly increasing the radius.
+        bord_rad += round(clip.height / self.height - 1 - 0.025)
+
+        same_x = self.width == clip.width
+        same_y = self.height == clip.height
+
+        offset_x = 0 if same_x else bord_rad
+        offset_y = 0 if same_y else bord_rad
+
+        size_x = clip.width - offset_x * 2
+        size_y = clip.height - offset_y * 2
+
+        self._bord_mask = squaremask(clip, size_x, size_y, offset_x, offset_y, invert=True).std.Limiter()
 
 
 DT = DescaleTarget
