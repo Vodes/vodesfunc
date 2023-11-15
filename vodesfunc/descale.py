@@ -181,7 +181,7 @@ class DescaleTarget(TargetVals):
         """
         Generates and returns the fully upscaled & masked & what not clip
         """
-        if self.descale == None or self.rescale == None:
+        if self.descale is None or self.rescale is None:
             self.generate_clips(clip)
 
         bits, y = get_depth(clip), get_y(clip)
@@ -190,7 +190,11 @@ class DescaleTarget(TargetVals):
             self.doubled = self.upscaler.double(self.descale)
         else:
             self.upscaler = Scaler.ensure_obj(self.upscaler)
-            self.doubled = self.upscaler.scale(self.descale, self.descale.width * 2, self.descale.height * 2)
+            self.doubled = self.upscaler.scale(
+                self.descale,
+                self.descale.width * ((self.width != self.input_clip.width) + 1),
+                self.descale.height * ((self.height != self.input_clip.height) + 1)
+            )
 
         if self.do_post_double is not None:
             self.doubled = self.do_post_double(self.doubled)
