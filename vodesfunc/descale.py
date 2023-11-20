@@ -1,4 +1,4 @@
-from vstools import vs, core, get_y, depth, iterate, ColorRange, join, get_depth, FieldBased, FieldBasedT
+from vstools import vs, core, get_y, depth, iterate, ColorRange, join, get_depth, FieldBased, FieldBasedT, get_w
 from vskernels import Scaler, ScalerT, Kernel, KernelT, Catrom
 from vsmasktools import EdgeDetectT, EdgeDetect
 from typing import Callable, Sequence, Union
@@ -95,7 +95,7 @@ class DescaleTarget(TargetVals):
         self.field_based = FieldBased.from_param(self.field_based) or FieldBased.from_video(clip)
 
         if not self.width:
-            self.width = float(self.height * clip.width / clip.height)
+            self.width = float((self.height * clip.width / clip.height) if not self.height.is_integer() else get_w(self.height, clip))
 
         if self.field_based.is_inter:
             if not self.height.is_integer():
@@ -109,7 +109,7 @@ class DescaleTarget(TargetVals):
             clip = FieldBased.PROGRESSIVE.apply(clip)
             self.line_mask = self.line_mask or False
         elif self.height.is_integer():
-            self.descale = self.kernel.descale(clip, self.width, self.height, self.shift)
+            self.descale = self.kernel.descale(clip, int(self.width), int(self.height), self.shift)
             self.rescale = self.kernel.scale(self.descale, clip.width, clip.height, self.shift)
             ref_y = self.rescale
         else:
@@ -129,7 +129,7 @@ class DescaleTarget(TargetVals):
                 .std.SetFrameProp("Rescale", self.index + 1)
             )
             if self.credit_mask_bh:
-                base_height_desc = self.kernel.descale(clip, self.base_height * (clip.width / clip.height), self.base_height)
+                base_height_desc = self.kernel.descale(clip, get_w(self.base_height, clip), self.base_height)
                 ref_y = self.kernel.scale(base_height_desc, clip.width, clip.height)
             else:
                 ref_y = self.rescale
@@ -193,7 +193,7 @@ class DescaleTarget(TargetVals):
             self.doubled = self.upscaler.scale(
                 self.descale,
                 self.descale.width * ((self.width != self.input_clip.width) + 1),
-                self.descale.height * ((self.height != self.input_clip.height) + 1)
+                self.descale.height * ((self.height != self.input_clip.height) + 1),
             )
 
         if self.do_post_double is not None:
