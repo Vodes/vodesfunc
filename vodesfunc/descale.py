@@ -67,6 +67,8 @@ class DescaleTarget(TargetVals):
                                 1: Assume the image was resized with zero padding.
                                 2: Assume the image was resized with extend padding, where the outermost row was extended infinitely far.
                             Defaults to 0.
+    :param border_radius:   Radius for the border mask. Only used when border_handling is set to 1 or 2.
+                            Defaults to kernel radius if possible, else 2.
     :param bbmod_masks:     Specify rows to be bbmod'ed for a clip to generate the masks on. Will probably be useful for the new border param in descale.
     """
 
@@ -85,6 +87,7 @@ class DescaleTarget(TargetVals):
     line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float | None]] | None = None
     field_based: FieldBasedT | None = None
     border_handling: int = 0
+    border_radius: int | None = None
     bbmod_masks: int | list[int] = 0  # Not actually implemented yet lol
 
     def generate_clips(self, clip: vs.VideoNode) -> "DescaleTarget":
@@ -271,10 +274,11 @@ class DescaleTarget(TargetVals):
 
     def _set_bord_mask(self, clip: vs.VideoNode) -> vs.VideoNode:
         """Set an attribute for a border mask for border_handling."""
-        try:
-            bord_rad = self.kernel.kernel_radius
-        except (AttributeError, NotImplementedError):
-            bord_rad = 2
+        if (bord_rad := self.border_radius) is None:
+            try:
+                bord_rad = self.kernel.kernel_radius
+            except (AttributeError, NotImplementedError):
+                bord_rad = 2
 
         # Expands border mask radii based on the scale factor. Only really relevant for factors ~2.0.
         # Reduce by a bit more than 1 to stop frac ~720p resolutions from needlessly increasing the radius.
