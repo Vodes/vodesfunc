@@ -3,9 +3,10 @@ from math import floor
 from typing import Any, Callable, Sequence, Union
 
 from vskernels import Catrom, Kernel, KernelT, Scaler, ScalerT
-from vsmasktools import (EdgeDetect, EdgeDetectT, KirschTCanny)
+from vsmasktools import EdgeDetect, EdgeDetectT, KirschTCanny
 from vstools import (ColorRange, FieldBased, FieldBasedT, core, depth,
-                     get_depth, get_y, iterate, join, vs, get_peak_value, get_lowest_value)
+                     get_depth, get_lowest_value, get_peak_value, get_y,
+                     iterate, join, padder, vs)
 
 from .scale import Doubler, NNEDI_Doubler
 
@@ -175,12 +176,20 @@ class DescaleTarget(TargetVals):
         return self
 
     def _perform_rescale(self, clip: vs.VideoNode, **kwargs: Any) -> vs.VideoNode:
-        if self.border_handling:
-            clip = clip.std.AddBorders(
-                *((0, 0) if self.width == self.input_clip.width else (10, 10)),
-                *((0, 0) if self.height == self.input_clip.height else (10, 10)),
-                get_lowest_value(clip, False, ColorRange.from_video(clip))
-            )
+        match int(self.border_handling):
+            case 1:
+                clip = clip.std.AddBorders(
+                    *((0, 0) if self.width == self.input_clip.width else (10, 10)),
+                    *((0, 0) if self.height == self.input_clip.height else (10, 10)),
+                    get_lowest_value(clip, False, ColorRange.from_video(clip))
+                )
+            case 2:
+                clip = padder(
+                    clip, *((0, 0) if self.width == self.input_clip.width else (10, 10)),
+                    *((0, 0) if self.height == self.input_clip.height else (10, 10)),
+                    reflect=False
+                )
+            case _: pass
 
         shift = [
             (kwargs.pop("src_top", False) or self.shift[0]) + (self.height != self.input_clip.height) * 10,
