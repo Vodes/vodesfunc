@@ -1,9 +1,11 @@
-from vstools import vs, core, get_y, depth, iterate, ColorRange, join, get_depth, FieldBased, FieldBasedT
-from vskernels import Scaler, ScalerT, Kernel, KernelT, Catrom
-from vsmasktools import EdgeDetectT, EdgeDetect, KirschTCanny, squaremask
-from typing import Callable, Sequence, Union
-from math import floor
 from dataclasses import dataclass
+from math import floor
+from typing import Any, Callable, Sequence, Union
+
+from vskernels import Catrom, Kernel, KernelT, Scaler, ScalerT
+from vsmasktools import (EdgeDetect, EdgeDetectT, KirschTCanny)
+from vstools import (ColorRange, Dar, FieldBased, FieldBasedT, core, depth,
+                     get_depth, get_y, iterate, join, vs, get_peak_value, get_lowest_value)
 
 from .scale import Doubler, NNEDI_Doubler
 
@@ -124,7 +126,7 @@ class DescaleTarget(TargetVals):
             self.line_mask = self.line_mask or False
         elif self.height.is_integer():
             self.descale = self.kernel.descale(clip, self.width, self.height, self.shift, border_handling=self.border_handling)
-            self.rescale = self.kernel.scale(self.descale, clip.width, clip.height, self.shift)
+            self.rescale = self._perform_rescale(self.descale)
             ref_y = self.rescale
         else:
             if self.base_height is None:
@@ -141,11 +143,8 @@ class DescaleTarget(TargetVals):
             )
             self.frac_args.pop("width")
             self.frac_args.pop("height")
-            self.rescale = (
-                self.kernel.scale(self.descale, clip.width, clip.height, **self.frac_args)
-                .std.CopyFrameProps(clip)
-                .std.SetFrameProp("Rescale", self.index + 1)
-            )
+            self.rescale = self._perform_rescale(self.descale, **self.frac_args)
+            self.rescale = self.rescale.std.CopyFrameProps(clip).std.SetFrameProp("Rescale", self.index + 1)
             if self.credit_mask_bh:
                 base_height_desc = self.kernel.descale(
                     clip, self.base_height * (clip.width / clip.height), self.base_height, border_handling=self.border_handling
@@ -177,6 +176,26 @@ class DescaleTarget(TargetVals):
             self.credit_mask = depth(self.credit_mask, bits).std.Limiter()
 
         return self
+
+    def _perform_rescale(self, clip: vs.VideoNode, **kwargs: Any) -> vs.VideoNode:
+        if self.border_handling:
+            clip = clip.std.AddBorders(
+                *((0, 0) if self.width == self.input_clip.width else (10, 10)),
+                *((0, 0) if self.height == self.input_clip.height else (10, 10)),
+                get_lowest_value(clip, False, ColorRange.from_video(clip))
+            )
+
+        shift = [
+            (kwargs.pop("src_top", False) or self.shift[0]) + (self.height != self.input_clip.height) * 10,
+            (kwargs.pop("src_left", False) or self.shift[1]) + (self.width != self.input_clip.width) * 10,
+        ]
+
+        return self.kernel.scale(
+            clip, self.input_clip.width, self.input_clip.height, shift,
+            src_width=kwargs.pop("src_width", clip.width) - (clip.width - self.width),
+            src_height=kwargs.pop("src_height", clip.height) - (clip.height - self.height),
+            **kwargs
+        )
 
     def get_diff(self, clip: vs.VideoNode) -> vs.VideoNode:
         """
