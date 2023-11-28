@@ -3,9 +3,9 @@ from math import floor
 from typing import Any, Callable, Sequence, Union
 
 from vskernels import Catrom, Kernel, KernelT, Scaler, ScalerT
-from vsmasktools import (EdgeDetect, EdgeDetectT, KirschTCanny)
-from vstools import (ColorRange, Dar, FieldBased, FieldBasedT, core, depth,
-                     get_depth, get_y, iterate, join, vs, get_peak_value, get_lowest_value)
+from vsmasktools import EdgeDetect, EdgeDetectT, KirschTCanny, squaremask
+from vstools import (ColorRange, FieldBased, FieldBasedT, core, depth,
+                     get_depth, get_lowest_value, get_y, iterate, join, vs)
 
 from .scale import Doubler, NNEDI_Doubler
 
