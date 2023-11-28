@@ -191,15 +191,21 @@ class DescaleTarget(TargetVals):
                 )
             case _: pass
 
+        shift_top = kwargs.pop("src_top", False) or self.shift[0]
+        shift_left = kwargs.pop("src_left", False) or self.shift[1]
+
         shift = [
-            (kwargs.pop("src_top", False) or self.shift[0]) + (self.height != self.input_clip.height) * 10,
-            (kwargs.pop("src_left", False) or self.shift[1]) + (self.width != self.input_clip.width) * 10,
+             shift_top + (self.height != self.input_clip.height and self.border_handling) * 10,
+             shift_left + (self.width != self.input_clip.width and self.border_handling) * 10,
         ]
+
+        src_width = kwargs.pop("src_width", clip.width)
+        src_height = kwargs.pop("src_height", clip.height)
 
         return self.kernel.scale(
             clip, self.input_clip.width, self.input_clip.height, shift,
-            src_width=kwargs.pop("src_width", clip.width) - (clip.width - self.width),
-            src_height=kwargs.pop("src_height", clip.height) - (clip.height - self.height),
+            src_width=src_width - ((clip.width - self.width) if float(self.width).is_integer() else 0),
+            src_height=src_height - ((clip.height - self.height) if float(self.width).is_integer() else 0),
             **kwargs
         )
 
