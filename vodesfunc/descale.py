@@ -108,7 +108,7 @@ class DescaleTarget(TargetVals):
         self.border_handling = self.kernel.kwargs.pop("border_handling", self.border_handling)
 
         if not self.width:
-            self.width = float(self.height * clip.width / clip.height)
+            self.width = float((self.height * clip.width / clip.height) if not self.height.is_integer() else get_w(self.height, clip))
 
         if self.field_based.is_inter:
             if not self.height.is_integer():
@@ -209,7 +209,7 @@ class DescaleTarget(TargetVals):
         """
         Generates and returns the fully upscaled & masked & what not clip
         """
-        if self.descale == None or self.rescale == None:
+        if self.descale is None or self.rescale is None:
             self.generate_clips(clip)
 
         bits, y = get_depth(clip), get_y(clip)
