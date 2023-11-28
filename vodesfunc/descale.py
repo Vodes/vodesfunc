@@ -320,7 +320,7 @@ class DescaleTarget(TargetVals):
             vertical_crop = (0, 0)
         else:
             base_height = self.base_height or self.height
-            src_top = self.frac_args.src_top if hasattr(self, "frac_args") else self.shift[0]
+            src_top = self.frac_args.get("src_top", 0) if hasattr(self, "frac_args") else self.shift[0]
 
             top = 1 + floor(
                 (-(base_height - 1) / 2 + self._kernel_window - src_top - 1)
@@ -338,7 +338,7 @@ class DescaleTarget(TargetVals):
             horizontal_crop = (0, 0)
         else:
             base_width = self.base_width or self.width
-            src_left = self.frac_args.src_left if hasattr(self, "frac_args") else self.shift[1]
+            src_left = self.frac_args.get("src_left", 0) if hasattr(self, "frac_args") else self.shift[1]
 
             left = 1 + floor(
                 (-(base_width - 1) / 2 + self._kernel_window - src_left - 1)
