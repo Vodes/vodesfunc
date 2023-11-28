@@ -283,9 +283,6 @@ class DescaleTarget(TargetVals):
     def _return_linemask(self) -> vs.VideoNode:
         return core.std.BlankClip(self.input_clip) if self.line_mask == False else self.line_mask
 
-    def _return_bordermask(self) -> vs.VideoNode:
-        return core.std.BlankClip(self.input_clip) if not hasattr(self, "_bord_mask") else self._bord_mask
-
     def _return_doubled(self) -> vs.VideoNode:
         return core.std.BlankClip(self.input_clip, width=self.input_clip * 2) if not self.doubled else self.doubled
 
