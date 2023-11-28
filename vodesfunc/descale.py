@@ -1,12 +1,12 @@
 from dataclasses import dataclass
-from math import floor
+from math import ceil, floor
 from typing import Any, Callable, Sequence, Union
 
 from vskernels import Catrom, Kernel, KernelT, Scaler, ScalerT
 from vsmasktools import EdgeDetect, EdgeDetectT, KirschTCanny
 from vstools import (ColorRange, FieldBased, FieldBasedT, core, depth,
-                     get_depth, get_lowest_value, get_peak_value, get_y,
-                     iterate, join, padder, vs)
+                     get_depth, get_h, get_lowest_value, get_peak_value, get_w,
+                     get_y, iterate, join, padder, vs)
 
 from .scale import Doubler, NNEDI_Doubler
 
@@ -325,36 +325,36 @@ class DescaleTarget(TargetVals):
         if self.height == self.input_clip.height:
             vertical_crop = (0, 0)
         else:
-            base_height = self.base_height or self.height
+            base_height = self.base_height or get_h(self.base_width, self.descale) if self.base_width else self.height
             src_top = self.frac_args.get("src_top", 0) if hasattr(self, "frac_args") else self.shift[0]
 
-            top = 1 + floor(
-                (-(base_height - 1) / 2 + self._kernel_window - src_top - 1)
+            top = max(ceil(
+                (-(self.height - 1) / 2 + self._kernel_window - src_top - 1)
                 * self.input_clip.height / self.height + (self.input_clip.height - 1) / 2
-            )
+            ), 0)
 
-            bottom = 1 + floor(
-                (-(base_height - 1) / 2 + self._kernel_window - (base_height - self.height - src_top) - 1)
+            bottom = max(ceil(
+                (-(self.height - 1) / 2 + self._kernel_window - (base_height - self.height - src_top) - 1)
                 * self.input_clip.height / self.height + (self.input_clip.height - 1) / 2
-            )
+            ), 0)
 
             vertical_crop = (top, bottom)
 
         if self.width == self.input_clip.width:
             horizontal_crop = (0, 0)
         else:
-            base_width = self.base_width or self.width
+            base_width = self.base_width or get_w(self.base_height, self.descale) if self.base_height else self.width
             src_left = self.frac_args.get("src_left", 0) if hasattr(self, "frac_args") else self.shift[1]
 
-            left = 1 + floor(
-                (-(base_width - 1) / 2 + self._kernel_window - src_left - 1)
+            left = max(ceil(
+                (-(self.width - 1) / 2 + self._kernel_window - src_left - 1)
                 * self.input_clip.width / self.width + (self.input_clip.width - 1) / 2
-            )
+            ), 0)
 
-            right = 1 + floor(
-                (-(base_width - 1) / 2 + self._kernel_window - (base_width - self.width - src_left) - 1)
+            right = max(ceil(
+                (-(self.width - 1) / 2 + self._kernel_window - (base_width - self.width - src_left) - 1)
                 * self.input_clip.width / self.width + (self.input_clip.width - 1) / 2
-            )
+            ), 0)
 
             horizontal_crop = (left, right)
 
