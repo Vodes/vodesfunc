@@ -86,7 +86,6 @@ class DescaleTarget(TargetVals):
                             Defaults to 0.
     :param border_radius:   Radius for the border mask. Only used when border_handling is set to 1 or 2.
                             Defaults to kernel radius if possible, else 2.
-    :param bbmod_masks:     Specify rows to be bbmod'ed for a clip to generate the masks on. Will probably be useful for the new border param in descale.
     """
 
     height: float
@@ -105,7 +104,6 @@ class DescaleTarget(TargetVals):
     field_based: FieldBasedT | None = None
     border_handling: int = 0
     border_radius: int | None = None
-    bbmod_masks: int | list[int] = 0  # Not actually implemented yet lol
 
     def generate_clips(self, clip: vs.VideoNode) -> "DescaleTarget":
         """
