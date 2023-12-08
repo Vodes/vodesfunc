@@ -1,9 +1,26 @@
-from vstools import vs, core, get_y, depth, iterate, ColorRange, join, get_depth, FieldBased, FieldBasedT, get_w
-from vskernels import Scaler, ScalerT, Kernel, KernelT, Catrom
-from vsmasktools import EdgeDetectT, EdgeDetect
-from typing import Callable, Sequence, Union
-from math import floor
 from dataclasses import dataclass
+from math import ceil, floor
+from typing import Any, Callable, Sequence, Union
+
+from vskernels import Catrom, Kernel, KernelT, Scaler, ScalerT
+from vsmasktools import EdgeDetect, EdgeDetectT, KirschTCanny
+from vstools import (
+    ColorRange,
+    FieldBased,
+    FieldBasedT,
+    core,
+    depth,
+    get_depth,
+    get_h,
+    get_lowest_value,
+    get_peak_value,
+    get_w,
+    get_y,
+    iterate,
+    join,
+    padder,
+    vs,
+)
 
 from .scale import Doubler, NNEDI_Doubler
 
@@ -62,7 +79,13 @@ class DescaleTarget(TargetVals):
     :param field_based:     Per-field descaling. Must be a FieldBased object. For example, `field_based=FieldBased.TFF`.
                             This indicates the order the fields get operated in, and whether it needs special attention.
                             Defaults to checking the input clip for the frameprop.
-    :param bbmod_masks:     Specify rows to be bbmod'ed for a clip to generate the masks on. Will probably be useful for the new border param in descale.
+    :param border_handling: Adjust the way the clip is padded internally during the scaling process. Accepted values are:
+                                0: Assume the image was resized with mirror padding.
+                                1: Assume the image was resized with zero padding.
+                                2: Assume the image was resized with extend padding, where the outermost row was extended infinitely far.
+                            Defaults to 0.
+    :param border_radius:   Radius for the border mask. Only used when border_handling is set to 1 or 2.
+                            Defaults to kernel radius if possible, else 2.
     """
 
     height: float
@@ -79,7 +102,8 @@ class DescaleTarget(TargetVals):
     credit_mask_bh: bool = False
     line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float | None]] | None = None
     field_based: FieldBasedT | None = None
-    bbmod_masks: int | list[int] = 0  # Not actually implemented yet lol
+    border_handling: int = 0
+    border_radius: int | None = None
 
     def generate_clips(self, clip: vs.VideoNode) -> "DescaleTarget":
         """
@@ -93,6 +117,8 @@ class DescaleTarget(TargetVals):
         self.height = float(self.height)
 
         self.field_based = FieldBased.from_param(self.field_based) or FieldBased.from_video(clip)
+
+        self.border_handling = self.kernel.kwargs.pop("border_handling", self.border_handling)
 
         if not self.width:
             self.width = float((self.height * clip.width / clip.height) if not self.height.is_integer() else get_w(self.height, clip))
@@ -109,8 +135,8 @@ class DescaleTarget(TargetVals):
             clip = FieldBased.PROGRESSIVE.apply(clip)
             self.line_mask = self.line_mask or False
         elif self.height.is_integer():
-            self.descale = self.kernel.descale(clip, int(self.width), int(self.height), self.shift)
-            self.rescale = self.kernel.scale(self.descale, clip.width, clip.height, self.shift)
+            self.descale = self.kernel.descale(clip, self.width, self.height, self.shift, border_handling=self.border_handling)
+            self.rescale = self._perform_rescale(self.descale)
             ref_y = self.rescale
         else:
             if self.base_height is None:
@@ -120,34 +146,29 @@ class DescaleTarget(TargetVals):
             if self.base_height < self.height:
                 raise ValueError("DescaleTarget: Your base_height has to be bigger than your height.")
             self.frac_args = get_args(clip, self.base_height, self.height, self.base_width, self.shift)
-            self.descale = self.kernel.descale(clip, **self.frac_args).std.CopyFrameProps(clip).std.SetFrameProp("Descale", self.index + 1)
+            self.descale = (
+                self.kernel.descale(clip, **self.frac_args, border_handling=self.border_handling)
+                .std.CopyFrameProps(clip)
+                .std.SetFrameProp("Descale", self.index + 1)
+            )
             self.frac_args.pop("width")
             self.frac_args.pop("height")
-            self.rescale = (
-                self.kernel.scale(self.descale, clip.width, clip.height, **self.frac_args)
-                .std.CopyFrameProps(clip)
-                .std.SetFrameProp("Rescale", self.index + 1)
-            )
+            self.rescale = self._perform_rescale(self.descale, **self.frac_args)
+            self.rescale = self.rescale.std.CopyFrameProps(clip).std.SetFrameProp("Rescale", self.index + 1)
             if self.credit_mask_bh:
-                base_height_desc = self.kernel.descale(clip, get_w(self.base_height, clip), self.base_height)
+                base_height_desc = self.kernel.descale(
+                    clip, self.base_height * (clip.width / clip.height), self.base_height, border_handling=self.border_handling
+                )
                 ref_y = self.kernel.scale(base_height_desc, clip.width, clip.height)
             else:
                 ref_y = self.rescale
 
         if self.line_mask != False and not isinstance(self.line_mask, Sequence):
-            if not isinstance(self.line_mask, vs.VideoNode):
-                try:
-                    from vsmasktools.edge import KirschTCanny
-
-                    try:
-                        # Scaling was changed so I abuse the new param to check if its the newer version
-                        self.line_mask = KirschTCanny().edgemask(clip, lthr=80 / 255, hthr=150 / 255, planes=(0, True))
-                    except:
-                        self.line_mask = KirschTCanny().edgemask(clip, lthr=80 << 8, hthr=150 << 8)
-                except:
-                    from vsmask.edge import KirschTCanny
-
-                    self.line_mask = KirschTCanny().edgemask(clip, lthr=80 << 8, hthr=150 << 8)
+            try:
+                # Scaling was changed so I abuse the new param to check if its the newer version
+                self.line_mask = KirschTCanny().edgemask(clip, lthr=80 / 255, hthr=150 / 255, planes=(0, True))
+            except:
+                self.line_mask = KirschTCanny().edgemask(clip, lthr=80 << 8, hthr=150 << 8)
 
             if self.do_post_double is not None:
                 self.line_mask = self.line_mask.std.Inflate()
@@ -165,6 +186,45 @@ class DescaleTarget(TargetVals):
             self.credit_mask = depth(self.credit_mask, bits)
 
         return self
+
+    def _perform_rescale(self, clip: vs.VideoNode, **kwargs: Any) -> vs.VideoNode:
+        match int(self.border_handling):
+            case 1:
+                clip = clip.std.AddBorders(
+                    *((0, 0) if self.width == self.input_clip.width else (10, 10)),
+                    *((0, 0) if self.height == self.input_clip.height else (10, 10)),
+                    get_lowest_value(clip, False, ColorRange.from_video(clip)),
+                )
+            case 2:
+                clip = padder(
+                    clip,
+                    *((0, 0) if self.width == self.input_clip.width else (10, 10)),
+                    *((0, 0) if self.height == self.input_clip.height else (10, 10)),
+                    reflect=False,
+                )
+            case _:
+                pass
+
+        shift_top = kwargs.pop("src_top", False) or self.shift[0]
+        shift_left = kwargs.pop("src_left", False) or self.shift[1]
+
+        shift = [
+            shift_top + (self.height != self.input_clip.height and self.border_handling) * 10,
+            shift_left + (self.width != self.input_clip.width and self.border_handling) * 10,
+        ]
+
+        src_width = kwargs.pop("src_width", clip.width)
+        src_height = kwargs.pop("src_height", clip.height)
+
+        return self.kernel.scale(
+            clip,
+            self.input_clip.width,
+            self.input_clip.height,
+            shift,
+            src_width=src_width - ((clip.width - self.width) if float(self.width).is_integer() else 0),
+            src_height=src_height - ((clip.height - self.height) if float(self.width).is_integer() else 0),
+            **kwargs,
+        )
 
     def get_diff(self, clip: vs.VideoNode) -> vs.VideoNode:
         """
@@ -190,6 +250,7 @@ class DescaleTarget(TargetVals):
             self.doubled = self.upscaler.double(self.descale)
         else:
             self.upscaler = Scaler.ensure_obj(self.upscaler)
+
             self.doubled = self.upscaler.scale(
                 self.descale,
                 self.descale.width * ((self.width != self.input_clip.width) + 1),
@@ -222,14 +283,16 @@ class DescaleTarget(TargetVals):
                     mask = mask_fun.edgemask(self.doubled, self.line_mask[2], self.line_mask[3], planes=0)
                 self.line_mask = Scaler.ensure_obj(self.line_mask[1]).scale(mask, clip.width, clip.height)
 
-            if get_depth(self.line_mask) == 32:
-                self.line_mask = self.line_mask.std.Limiter()
-            self.upscale = y.std.MaskedMerge(self.upscale, self.line_mask)
+        if self.border_handling:
+            self._add_border_mask()
 
-        if self.credit_mask != False or self.credit_mask_thr <= 0:
-            if get_depth(self.credit_mask) == 32:
-                self.credit_mask = self.credit_mask.std.Limiter()
-            self.upscale = self.upscale.std.MaskedMerge(y, self.credit_mask)
+        if isinstance(self.credit_mask, vs.VideoNode) and isinstance(self.line_mask, vs.VideoNode):
+            self.final_mask = core.std.Expr([self.line_mask, self.credit_mask], "x y -")
+            self.upscale = y.std.MaskedMerge(self.upscale, self.final_mask.std.Limiter())
+        elif isinstance(self.credit_mask, vs.VideoNode):
+            self.upscale = self.upscale.std.MaskedMerge(y, self.credit_mask.std.Limiter())
+        elif isinstance(self.line_mask, vs.VideoNode):
+            self.upscale = y.std.MaskedMerge(self.upscale, self.line_mask.std.Limiter())
 
         self.upscale = depth(self.upscale, bits)
         self.upscale = self.upscale if clip.format.color_family == vs.GRAY else join(self.upscale, clip)
@@ -247,7 +310,7 @@ class DescaleTarget(TargetVals):
     def _descale_fields(self, clip: vs.VideoNode) -> None:
         wclip = self.field_based.apply(clip)
 
-        self.descale = self.kernel.descale(wclip, self.width, self.height)
+        self.descale = self.kernel.descale(wclip, self.width, self.height, border_handling=self.border_handling)
         self.rescale = self.kernel.scale(self.descale, clip.width, clip.height)
 
         self.descale = FieldBased.PROGRESSIVE.apply(self.descale)
@@ -257,6 +320,75 @@ class DescaleTarget(TargetVals):
     def crossconv_shift_calc_irregular(clip: vs.VideoNode, native_height: int) -> float:
         """Calculate the shift for an irregular cross-conversion."""
         return 0.25 / (clip.height / native_height)
+
+    def _add_border_mask(self) -> None:
+        """Add the borders to the line mask for border_handling."""
+        if self.border_radius == 0:
+            return
+
+        if self.line_mask:
+            self.line_mask = self._crop_mask_bord(self.line_mask, get_peak_value(self.input_clip))
+
+        if self.credit_mask:
+            self.credit_mask = self._crop_mask_bord(self.credit_mask)
+
+    def _crop_mask_bord(self, mask: vs.VideoNode, color: float = 0.0) -> vs.VideoNode:
+        if not hasattr(self, "_bord_crop_args"):
+            self._bord_crop_args = self._get_border_crop()
+
+        return mask.std.Crop(*self._bord_crop_args).std.AddBorders(*self._bord_crop_args, [color])
+
+    # fmt: off
+    def _get_border_crop(self) -> tuple:
+        """Get the crops for the border handling masking."""
+        if self.height == self.input_clip.height:
+            vertical_crop = (0, 0)
+        else:
+            base_height = self.base_height or get_h(self.base_width, self.descale) if self.base_width else self.height
+            src_top = self.frac_args.get("src_top", 0) if hasattr(self, "frac_args") else self.shift[0]
+
+            top = max(ceil(
+                (-(self.height - 1) / 2 + self._kernel_window - src_top - 1)
+                * self.input_clip.height / self.height + (self.input_clip.height - 1) / 2
+            ), 0)
+
+            bottom = max(ceil(
+                (-(self.height - 1) / 2 + self._kernel_window - (base_height - self.height - src_top) - 1)
+                * self.input_clip.height / self.height + (self.input_clip.height - 1) / 2
+            ), 0)
+
+            vertical_crop = (top, bottom)
+
+        if self.width == self.input_clip.width:
+            horizontal_crop = (0, 0)
+        else:
+            base_width = self.base_width or get_w(self.base_height, self.descale) if self.base_height else self.width
+            src_left = self.frac_args.get("src_left", 0) if hasattr(self, "frac_args") else self.shift[1]
+
+            left = max(ceil(
+                (-(self.width - 1) / 2 + self._kernel_window - src_left - 1)
+                * self.input_clip.width / self.width + (self.input_clip.width - 1) / 2
+            ), 0)
+
+            right = max(ceil(
+                (-(self.width - 1) / 2 + self._kernel_window - (base_width - self.width - src_left) - 1)
+                * self.input_clip.width / self.width + (self.input_clip.width - 1) / 2
+            ), 0)
+
+            horizontal_crop = (left, right)
+
+        return horizontal_crop + vertical_crop
+    # fmt: on
+
+    @property
+    def _kernel_window(self) -> int:
+        if (bord_rad := self.border_radius) is None:
+            try:
+                bord_rad = self.kernel.kernel_radius
+            except (AttributeError, NotImplementedError):
+                bord_rad = 2
+
+        return bord_rad
 
 
 DT = DescaleTarget
