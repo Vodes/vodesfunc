@@ -106,7 +106,7 @@ class Shader_Doubler(Doubler):
 
 
 class Waifu2x_Doubler(Doubler):
-    backend: any
+    backend: Any
     kwargs: KwargsT
     w2xargs: KwargsT = {}
 
@@ -131,7 +131,7 @@ class Waifu2x_Doubler(Doubler):
         :param model:           Model to use from vsmlrt.
         :param kwargs:          Args that get passed to both the Backend and actual scaling function.
         """
-        from vsmlrt import Backend
+        from vsmlrt import Backend, backendT
 
         self.kwargs = {"num_streams": num_streams, "fp16": fp16}
 
@@ -146,8 +146,8 @@ class Waifu2x_Doubler(Doubler):
                 if nv is not None and not hasattr(core, "trt") and hasattr(core, "ort"):
                     self.kwargs.update({"use_cuda_graph": True})
                 else:
-                    props: KwargsT = core.trt.DeviceProperties(kwargs.get("device_id", 0))
-                    version_props: KwargsT = core.trt.Version()
+                    props: KwargsT = core.trt.DeviceProperties(kwargs.get("device_id", 0))  # type: ignore
+                    version_props: KwargsT = core.trt.Version()  # type: ignore
 
                     vram = props.get("total_global_memory", 0)
                     trt_version = float(version_props.get("tensorrt_version", 0))
@@ -184,7 +184,7 @@ class Waifu2x_Doubler(Doubler):
 
         if cuda is False:
             backend = kwargs.pop("backend", None)
-            if backend and isinstance(backend, Backend):
+            if backend and isinstance(backend, backendT):
                 self.backend = backend
             else:
                 if hasattr(core, "ncnn"):
@@ -196,7 +196,6 @@ class Waifu2x_Doubler(Doubler):
             self.backend = Backend.ORT_CUDA(**self.kwargs) if hasattr(core, "ort") else Backend.OV_GPU(**self.kwargs)
         else:
             self.backend = Backend.TRT(**self.kwargs)
-
         self.kwargs = kwargs
         self.model = model
 
@@ -239,7 +238,7 @@ class Waifu2x_Doubler(Doubler):
 
 class Clamped_Doubler(Doubler):
     sharp_doubler: Doubler
-    sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode] = None
+    sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode] | None = None
 
     def __init__(
         self,
@@ -267,7 +266,7 @@ class Clamped_Doubler(Doubler):
         self.sharpen_smooth = sharpen_smooth
 
         if ratio > 100 or ratio < 1:
-            raise "Clamped_Doubler: ratio should be a value between 1 and 100"
+            raise ValueError("Clamped_Doubler: ratio should be a value between 1 and 100")
         self.ratio = ratio
         self.kwargs = kwargs
 
