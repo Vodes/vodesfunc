@@ -94,7 +94,7 @@ class DescaleTarget(TargetVals):
     base_height: int | None = None
     width: float | None = None
     base_width: int | None = None
-    shift: tuple[int, int] = (0, 0)
+    shift: tuple[float, float] = (0, 0)
     do_post_double: Callable[[vs.VideoNode], vs.VideoNode] | None = None
     credit_mask: vs.VideoNode | bool | None = None
     credit_mask_thr: float = 0.04
