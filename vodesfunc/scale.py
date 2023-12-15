@@ -1,5 +1,5 @@
 from typing import Any, Callable
-from vskernels import Catrom, Kernel, Scaler, ScalerT, Lanczos, Point
+from vskernels import Catrom, Lanczos
 from vstools import inject_self, vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version, Transfer
 from vsrgtools.sharp import unsharp_masked
 from .types import PathLike
@@ -15,7 +15,7 @@ __all__: list[str] = [
 ]
 
 
-class Lanczos_PreSS(Scaler):
+class Lanczos_PreSS(Lanczos):
     """
     Convenience class to pass to a dehalo function.
     This serves the same purpose as NNEDI to double and reverse using point.
