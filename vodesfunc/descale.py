@@ -19,6 +19,7 @@ from vstools import (
     iterate,
     join,
     padder,
+    GenericVSFunction,
     vs,
 )
 
@@ -74,7 +75,9 @@ class DescaleTarget(TargetVals):
     :param line_mask:       Can be used to pass a mask that'll be used or False to disable line masking.
                             You can also pass a list containing edgemask function, scaler and thresholds to generate the mask on the doubled clip for potential better results.
                             If None is passed to the first threshold then the mask won't be binarized. It will also run a Maximum and Inflate call on the mask.
-                            Example: line_mask=(KirschTCanny, Bilinear, 50 / 255, 150 / 255)
+                            Example: `line_mask=(KirschTCanny, Bilinear, 50 / 255, 150 / 255)`
+                            You can also pass a function to create a mask on the doubled clip.
+                            Example: `line_mask=lambda clip: create_linemask(clip)`
     :param field_based:     Per-field descaling. Must be a FieldBased object. For example, `field_based=FieldBased.TFF`.
                             This indicates the order the fields get operated in, and whether it needs special attention.
                             Defaults to checking the input clip for the frameprop.
@@ -99,7 +102,7 @@ class DescaleTarget(TargetVals):
     credit_mask: vs.VideoNode | bool | None = None
     credit_mask_thr: float = 0.04
     credit_mask_bh: bool = False
-    line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float | None]] | None = None
+    line_mask: vs.VideoNode | bool | Sequence[Union[EdgeDetectT, ScalerT, float | None]] | GenericVSFunction | None = None
     field_based: FieldBasedT | None = None
     border_handling: int = 0
     border_radius: int | None = None
@@ -162,7 +165,7 @@ class DescaleTarget(TargetVals):
             else:
                 ref_y = self.rescale
 
-        if self.line_mask != False and not isinstance(self.line_mask, Sequence):
+        if self.line_mask != False and not isinstance(self.line_mask, Sequence) and not isinstance(self.line_mask, Callable):
             try:
                 # Scaling was changed so I abuse the new param to check if its the newer version
                 self.line_mask = KirschTCanny().edgemask(clip, lthr=80 / 255, hthr=150 / 255, planes=(0, True))
@@ -281,6 +284,8 @@ class DescaleTarget(TargetVals):
                 else:
                     mask = mask_fun.edgemask(self.doubled, self.line_mask[2], self.line_mask[3], planes=0)
                 self.line_mask = Scaler.ensure_obj(self.line_mask[1]).scale(mask, clip.width, clip.height)
+            elif isinstance(self.line_mask, Callable):
+                self.line_mask = self.line_mask(self.doubled)
 
         if self.border_handling:
             self._add_border_mask()
