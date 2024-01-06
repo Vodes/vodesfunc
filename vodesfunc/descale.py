@@ -269,7 +269,8 @@ class DescaleTarget(TargetVals):
             self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, **self.frac_args)
             self.upscale = self.upscale.std.CopyFrameProps(self.rescale)
         else:
-            self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, self.shift)
+            shift = (self.shift[0] * 2, self.shift[1] * 2)
+            self.upscale = self.downscaler.scale(self.doubled, clip.width, clip.height, shift)
 
         self.upscale = depth(self.upscale, bits)
         self.rescale = depth(self.rescale, bits)
