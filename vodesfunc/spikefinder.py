@@ -40,7 +40,7 @@ class NVENC_H265(VideoEncoder):
 
         out = make_output("encoded_nvenc", "mkv", user_passed=outfile)
 
-        args = [self.executable, "-hide_banner", "-f", "yuv4mpegpipe", "-i", "-", "-c:v", "hevc_nvenc"]
+        args = [self.executable, "-hide_banner", "-v", "quiet", "-stats", "-f", "yuv4mpegpipe", "-i", "-", "-c:v", "hevc_nvenc"]
         if self.settings:
             args.extend(shlex.split(self.settings))
         args.append(str(out))
@@ -120,7 +120,10 @@ def split_by_keyframes(data: list[Framedata], clip: vs.VideoNode) -> list[list[F
 
 
 def find_spikes(
-    clip: vs.VideoNode, threshold=11500, nvenc_settings: str = "-preset 3 -rc vbr_hq -pix_fmt p010le -b:v 6M -maxrate:v 22M"
+    clip: vs.VideoNode,
+    threshold=11500,
+    nvenc_settings: str = "-preset 3 -rc vbr_hq -pix_fmt p010le -b:v 6M -maxrate:v 22M",
+    print_ranges: bool = False,
 ) -> FrameRangesN:
     """
     Encodes a clip with nvenc hevc and analyzes the bitrate averages between scene changes to find spikes.
@@ -128,12 +131,15 @@ def find_spikes(
     :param clip:            Clip to encode
     :param threshold:       Bitrate threshold to add to ranges (in kbps, I think)
     :param nvenc_settings:  Settings to use for the encoder
+    :param print_ranges:    If you want to print the ranges with corresponding bitrates
     """
     ranges: list[SoftRange] = []
-
+    info("Encoding clip using nvenc...", find_spikes)
     temp_encode = NVENC_H265(nvenc_settings).encode(clip, "temp_nvenc")
     encoded_file = ensure_path_exists(temp_encode.file, find_spikes)
+    info("Extracting frame data...", find_spikes)
     framedata = fetch_frames_with_sizes(encoded_file, Fraction(clip.fps_num, clip.fps_den))
+    info("Finding scene changes...")
     chunks = split_by_keyframes(framedata, clip)
     encoded_file.unlink(True)
 
@@ -144,7 +150,8 @@ def find_spikes(
         avg = size_all / len(chunk)
         if avg > threshold:
             ranges.append((chunk[0].frame, chunk[-1].frame))
-            debug(f"Frames {chunk[0].frame} - {chunk[-1].frame}: {round(avg, 2)} kbps", find_spikes)
+            if print_ranges:
+                debug(f"Frames {chunk[0].frame} - {chunk[-1].frame}: {round(avg, 2)} kbps", find_spikes)
 
     # To make the ranges not have single frame outliers
     ranges_int = normalize_ranges_to_list(ranges)
