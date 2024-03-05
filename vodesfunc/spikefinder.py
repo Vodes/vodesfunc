@@ -1,4 +1,15 @@
-from vstools import initialize_clip, finalize_clip, Keyframes, get_depth, vs, core, FrameRangesN, normalize_ranges_to_list, normalize_list_to_ranges
+from vstools import (
+    initialize_clip,
+    finalize_clip,
+    Keyframes,
+    get_depth,
+    vs,
+    core,
+    FrameRangesN,
+    normalize_ranges_to_list,
+    normalize_list_to_ranges,
+    FrameRangeN,
+)
 from stgpytools import SoftRange
 from muxtools import get_executable, PathLike, VideoFile, warn, make_output, ensure_path_exists, info, debug, uniquify_path
 from vsmuxtools.video.encoders import VideoEncoder
@@ -119,11 +130,24 @@ def split_by_keyframes(data: list[Framedata], clip: vs.VideoNode) -> list[list[F
     return chunks
 
 
+def read_ranges_bookmarks(fileIn: Path) -> FrameRangesN:
+    ranges = list[FrameRangeN]()
+    with open(fileIn, "r", encoding="utf-8") as reader:
+        line = reader.readline()
+        ints = [int(it.strip()) for it in line.split(",")]
+        for range_start in ints[0::2]:
+            ranges.append((range_start, ints[ints.index(range_start) + 1]))
+
+    return ranges
+
+
 def find_spikes(
     clip: vs.VideoNode,
     threshold=11500,
     nvenc_settings: str = "-preset 3 -rc vbr_hq -pix_fmt p010le -b:v 6M -maxrate:v 22M",
     print_ranges: bool = False,
+    export_file: None | PathLike = None,
+    ignore_existing: bool = False,
 ) -> FrameRangesN:
     """
     Encodes a clip with nvenc hevc and analyzes the bitrate averages between scene changes to find spikes.
@@ -132,7 +156,17 @@ def find_spikes(
     :param threshold:       Bitrate threshold to add to ranges (in kbps, I think)
     :param nvenc_settings:  Settings to use for the encoder
     :param print_ranges:    If you want to print the ranges with corresponding bitrates
+    :param export_file:     Export the ranges to a bookmarks file with the given name. None to disable.
+    :param ignore_existing: Run again and overwrite the exported file if it exists. By default it won't run again.
     """
+    if export_file:
+        out_file = make_output(export_file, "bookmarks", user_passed=export_file)
+        if out_file.exists():
+            if ignore_existing:
+                out_file.unlink(True)
+            else:
+                return read_ranges_bookmarks(out_file)
+
     ranges: list[SoftRange] = []
     info("Encoding clip using nvenc...", find_spikes)
     temp_encode = NVENC_H265(nvenc_settings).encode(clip, "temp_nvenc")
@@ -156,4 +190,12 @@ def find_spikes(
     # To make the ranges not have single frame outliers
     ranges_int = normalize_ranges_to_list(ranges)
     final_ranges = normalize_list_to_ranges(ranges_int)
+
+    if export_file:
+        with open(out_file, "w", encoding="utf-8") as writer:
+            all_nums = list[int]()
+            for start, end in final_ranges:
+                all_nums.extend([start, end])
+            writer.write(", ".join([str(it) for it in all_nums]))
+
     return final_ranges
