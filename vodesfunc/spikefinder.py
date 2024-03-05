@@ -143,7 +143,7 @@ def read_ranges_bookmarks(fileIn: Path) -> FrameRangesN:
 
 def find_spikes(
     clip: vs.VideoNode,
-    threshold=11500,
+    threshold: int = 11500,
     nvenc_settings: str = "-preset 3 -rc vbr_hq -pix_fmt p010le -b:v 6M -maxrate:v 22M",
     print_ranges: bool = False,
     export_file: None | PathLike = None,
