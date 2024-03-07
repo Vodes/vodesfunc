@@ -59,6 +59,7 @@ def cope_aa(
     mode: CopeMode | int = CopeMode.Inverse,
     mask: bool | vs.VideoNode = True,
     no_aa_ranges: FrameRangesN = [],
+    hybrid_cl: bool = False,
     **kwargs: KwargsT,
 ) -> vs.VideoNode:
     """
@@ -73,6 +74,8 @@ def cope_aa(
     :param mode:                    Method to return back to input res. Available are UpDown (simple downscale), Descale and Inverse (fmtc).
     :param mask:                    Mask for eedi3 possibly save some calculations. Can be a custom one, True for a Kirsch or False to disable.
     :param no_aa_ranges:            Ranges you might not wanna AA for one reason or another.
+    :param hybrid_cl:               Use eedi3cl on one of the two interpolate calls.
+                                    Not sure if this is useful or not. Just wrote it to test.
     """
 
     def fmtc_args(kernel: Kernel) -> KwargsT:
@@ -100,7 +103,14 @@ def cope_aa(
     wclip = scalers[0].scale(clip, width, height)
     aa = wclip.std.Transpose()
     aa = antialiaser.interpolate(aa, False, sclip=aa, mclip=mask.std.Transpose() if mask else None, **kwargs).std.Transpose()
-    aa = antialiaser.interpolate(aa, False, sclip=aa, mclip=mask if mask else None, **kwargs)
+    if hybrid_cl and isinstance(antialiaser, Eedi3):
+        from copy import deepcopy
+
+        other_antialiaser = deepcopy(antialiaser)
+        other_antialiaser.opencl = True
+        aa = other_antialiaser.interpolate(aa, False, sclip=aa, **kwargs)
+    else:
+        aa = antialiaser.interpolate(aa, False, sclip=aa, mclip=mask if mask else None, **kwargs)
     aa = wclip.std.MaskedMerge(aa, mask)
     match mode:
         case CopeMode.Descale:
