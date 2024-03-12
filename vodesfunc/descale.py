@@ -292,7 +292,7 @@ class DescaleTarget(TargetVals):
             self._add_border_mask()
 
         if isinstance(self.credit_mask, vs.VideoNode) and isinstance(self.line_mask, vs.VideoNode):
-            self.final_mask = core.std.Expr([self.line_mask, self.credit_mask], "x y -")
+            self.final_mask = core.std.Expr([self.line_mask.std.Limiter(), self.credit_mask], "x y -")
             self.upscale = y.std.MaskedMerge(self.upscale, self.final_mask.std.Limiter())
         elif isinstance(self.credit_mask, vs.VideoNode):
             self.upscale = self.upscale.std.MaskedMerge(y, self.credit_mask.std.Limiter())
