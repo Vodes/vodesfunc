@@ -98,7 +98,7 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         """
         clip = self.funcutil.work_clip
         self.kernel = Kernel.ensure_obj(kernel)
-        self.shift = shift
+        self.shift = (shift[0] if shift[0] else None, shift[1] if shift[1] else None)
         self.border_handling = self.kernel.kwargs.pop("border_handling", border_handling)
         self.border_radius = border_radius
 
@@ -160,6 +160,8 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         """
         if isinstance(mask, vs.VideoNode):
             self.linemask_clip = mask
+            if self.border_handling:
+                self.linemask_clip = self._crop_mask_bord(self.linemask_clip)
             return self
         edgemaskFunc = KirschTCanny.ensure_obj(mask)
 
@@ -255,11 +257,11 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
 
         if isinstance(self.errormask_clip, vs.VideoNode) and isinstance(self.linemask_clip, vs.VideoNode):
             self.final_mask = core.std.Expr([self.linemask_clip.std.Limiter(), self.errormask_clip], "x y -")
-            self.upscaled = self.upscaled.std.MaskedMerge(self.upscaled, self.final_mask.std.Limiter())
+            self.upscaled = wclip.std.MaskedMerge(self.upscaled, self.final_mask.std.Limiter())
         elif isinstance(self.errormask_clip, vs.VideoNode):
-            self.upscaled = self.upscaled.std.MaskedMerge(self.upscaled, self.errormask_clip.std.Limiter())
+            self.upscaled = self.upscaled.std.MaskedMerge(wclip, self.errormask_clip.std.Limiter())
         elif isinstance(self.linemask_clip, vs.VideoNode):
-            self.upscaled = self.upscaled.std.MaskedMerge(self.upscaled, self.linemask_clip.std.Limiter())
+            self.upscaled = wclip.std.MaskedMerge(self.upscaled, self.linemask_clip.std.Limiter())
 
         return self
 
