@@ -232,6 +232,8 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         :param func:    This can be any function that takes a videonode input and returns a videonode.
                         You are responsible for keeping the format the same.
         """
+        if not self.doubled:
+            raise SyntaxError("post_double: Doubled clip has not been generated yet. Please call this after double().")
         self.doubled = func(self.doubled)
         return self
 
