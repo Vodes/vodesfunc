@@ -73,6 +73,7 @@ class RescaleBuilder:
         downscaler: ScalerT | None = None,
         maximum_iter: int = 0,
         inflate_iter: int = 0,
+        expand: int | tuple[int, int | None] = 0,
         **kwargs,
     ) -> Self:
         if isinstance(mask, vs.VideoNode):
@@ -90,8 +91,17 @@ class RescaleBuilder:
 
         if maximum_iter:
             self.linemask_clip = iterate(self.linemask_clip, core.std.Maximum, maximum_iter)
+
         if inflate_iter:
             self.linemask_clip = iterate(self.linemask_clip, core.std.Inflate, inflate_iter)
+
+        if expand:
+            if isinstance(expand, int):
+                expand = (expand, expand)
+            from vsmasktools import Morpho, XxpandMode
+
+            self.linemask_clip = Morpho.expand(self.linemask_clip, expand[0], expand[1], XxpandMode.ELLIPSE)
+
         return self
 
     def errormask(self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3) -> Self:
@@ -132,7 +142,7 @@ class RescaleBuilder:
             self.upscaled = scaler.scale(self.doubled, wclip.width, wclip.height, (self.shift[0] * 2, self.shift[1] * 2))
 
         if isinstance(self.errormask_clip, vs.VideoNode) and isinstance(self.linemask_clip, vs.VideoNode):
-            self.final_mask = core.std.Expr([self.linemask_clip, self.errormask_clip], "x y -")
+            self.final_mask = core.std.Expr([self.linemask_clip.std.Limiter(), self.errormask_clip], "x y -")
             self.upscaled = self.upscaled.std.MaskedMerge(self.upscaled, self.final_mask.std.Limiter())
         elif isinstance(self.errormask_clip, vs.VideoNode):
             self.upscaled = self.upscaled.std.MaskedMerge(self.upscaled, self.errormask_clip.std.Limiter())
