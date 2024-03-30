@@ -98,7 +98,7 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         """
         clip = self.funcutil.work_clip
         self.kernel = Kernel.ensure_obj(kernel)
-        self.shift = (shift[0] if shift[0] else None, shift[1] if shift[1] else None)
+        self.shift = shift
         self.border_handling = self.kernel.kwargs.pop("border_handling", border_handling)
         self.border_radius = border_radius
 
@@ -116,8 +116,11 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
             )
             self.rescaled = perform_rescale(self)
         else:
-            args, self.post_crop = fdescale_args(clip, height, base_height, base_width, shift[0], shift[1], width, mode)
-            _, self.rescale_args = fdescale_args(clip, height, base_height, base_width, shift[0], shift[1], width, mode, up_rate=1)
+            sanitized_shift = (shift[0] if shift[0] else None, shift[1] if shift[1] else None)
+            args, self.post_crop = fdescale_args(clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode)
+            _, self.rescale_args = fdescale_args(
+                clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode, up_rate=1
+            )
             self.height = args.get("src_height", clip.height)
             self.width = args.get("src_width", clip.width)
             self.base_height = base_height
@@ -173,31 +176,24 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         else:
             self.linemask_clip = edgemaskFunc.edgemask(self.funcutil.work_clip, **kwargs)
 
-        if maximum_iter:
-            self.linemask_clip = iterate(self.linemask_clip, core.std.Maximum, maximum_iter)
-
-        if inflate_iter:
-            self.linemask_clip = iterate(self.linemask_clip, core.std.Inflate, inflate_iter)
-
-        if expand:
-            if isinstance(expand, int):
-                expand = (expand, expand)
-            from vsmasktools import Morpho, XxpandMode
-
-            self.linemask_clip = Morpho.expand(self.linemask_clip, expand[0], expand[1], XxpandMode.ELLIPSE)
+        self.linemask_clip = self._process_mask(self.linemask_clip, maximum_iter, inflate_iter, expand)
 
         if self.border_handling:
             self.linemask_clip = self._crop_mask_bord(self.linemask_clip)
 
         return self
 
-    def errormask(self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3) -> Self:
+    def errormask(
+        self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3, expand: int | tuple[int, int | None] = 0
+    ) -> Self:
         """
         A function to apply a basic error mask to the final output.
 
         :param mask:            With a float, and by default, will be created internally. Could also pass a clip.
         :param maximum_iter:    Apply std.Maximum x amount of times
         :param inflate_iter:    Apply std.inflate x amount of times
+        :param expand:          Apply an ellipse morpho expand with the passed amount.
+                                Can be a tuple of (horizontal, vertical) or a single value for both.
         """
         if isinstance(mask, vs.VideoNode):
             self.errormask_clip = mask
@@ -206,8 +202,7 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         err_mask = core.std.Expr([depth(self.funcutil.work_clip, 32), depth(self.rescaled, 32)], f"x y - abs {mask} < 0 1 ?")
         err_mask = depth(err_mask, 16, range_out=ColorRange.FULL, range_in=ColorRange.FULL)
         err_mask = err_mask.rgvs.RemoveGrain(mode=6)
-        err_mask = iterate(err_mask, core.std.Maximum, maximum_iter)
-        err_mask = iterate(err_mask, core.std.Inflate, inflate_iter)
+        err_mask = self._process_mask(err_mask, maximum_iter, inflate_iter, expand)
         self.errormask_clip = depth(err_mask, get_depth(self.funcutil.work_clip))
 
         if self.border_handling:
@@ -275,6 +270,24 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         if not self.upscaled:
             self.downscale()
         return (self, self.funcutil.return_clip(self.upscaled))
+
+    def _process_mask(
+        self, mask: vs.VideoNode, maximum_iter: int = 0, inflate_iter: int = 0, expand: int | tuple[int, int | None] = 0
+    ) -> vs.VideoNode:
+        if maximum_iter:
+            mask = iterate(mask, core.std.Maximum, maximum_iter)
+
+        if inflate_iter:
+            mask = iterate(mask, core.std.Inflate, inflate_iter)
+
+        if expand:
+            if isinstance(expand, int):
+                expand = (expand, expand)
+            from vsmasktools import Morpho, XxpandMode
+
+            mask = Morpho.expand(mask, expand[0], expand[1], XxpandMode.ELLIPSE)
+
+        return mask
 
     def _crop_mask_bord(self, mask: vs.VideoNode, color: float = 0.0) -> vs.VideoNode:
         if not hasattr(self, "_bord_crop_args"):
