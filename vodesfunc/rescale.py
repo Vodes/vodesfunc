@@ -46,9 +46,8 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
     """
     Proof of concept Builder approach to rescaling.
 
-    In no way, shape or form done.
-    Linemask needs borderhandling
-    Descale doesn't handle fields yet
+    Doesn't handle FieldBased yet.
+    (Do I even have to do anything? Pretty sure vskernels does most of the work nowadays)
     """
 
     funcutil: FunctionUtil
@@ -74,6 +73,29 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         border_handling: int = 0,
         border_radius: int | None = None,
     ) -> Self:
+        """
+        Performs descale and rescale (with the same kernel).
+
+        :param kernel:              Kernel to descale with
+        :param height:              Height to descale to
+        :param width:               Width to descale to
+        :param base_height:         Padded height used in a "fractional" descale
+        :param base_width:          Padded width used in a "fractional" descale
+                                    Both of these are technically optional but highly recommended to have set for float width/height.
+
+        :param shift:               A custom shift to be applied
+        :param mode:                Whether to descale only height, only width, or both.
+                                    "h" or "w" respectively for the former two.
+
+        :param border_handling:     Adjust the way the clip is padded internally during the scaling process. Accepted values are:
+                                    0: Assume the image was resized with mirror padding.
+                                    1: Assume the image was resized with zero padding.
+                                    2: Assume the image was resized with extend padding, where the outermost row was extended infinitely far.
+                                    Defaults to 0.
+
+        :param border_radius:       Radius for the border mask. Only used when border_handling is set to 1 or 2.
+                                    Defaults to kernel radius if possible, else 2.
+        """
         clip = self.funcutil.work_clip
         self.kernel = Kernel.ensure_obj(kernel)
         self.shift = shift
@@ -106,6 +128,13 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         return self
 
     def post_descale(self, func: GenericVSFunction) -> Self:
+        """
+        A function to apply any arbitrary function on the descaled clip.\n
+        I can't think of a good usecase/example for this but I was asked to add this before.
+
+        :param func:    This can be any function that takes a videonode input and returns a videonode.
+                        You are responsible for keeping the format the same.
+        """
         self.descaled = func(self.descaled)
         return self
 
@@ -118,6 +147,17 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         expand: int | tuple[int, int | None] = 0,
         **kwargs,
     ) -> Self:
+        """
+        A function to apply a linemask to the final output.
+
+        :param mask:            This can be a masking function like `KirschTCanny` (also the default if `None`) or a clip.
+        :param downscaler:      Downscaler to use if creating a linemask on the doubled clip. Defaults to `Bilinear` if `None`.
+        :param maximum_iter:    Apply std.Maximum x amount of times
+        :param inflate_iter:    Apply std.inflate x amount of times
+        :param expand:          Apply an ellipse morpho expand with the passed amount.
+                                Can be a tuple of (horizontal, vertical) or a single value for both.
+        :param **kwargs:        Any other params to pass to the edgemask creation. For example `lthr` or `hthr`.
+        """
         if isinstance(mask, vs.VideoNode):
             self.linemask_clip = mask
             return self
@@ -150,6 +190,13 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         return self
 
     def errormask(self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3) -> Self:
+        """
+        A function to apply a basic error mask to the final output.
+
+        :param mask:            With a float, and by default, will be created internally. Could also pass a clip.
+        :param maximum_iter:    Apply std.Maximum x amount of times
+        :param inflate_iter:    Apply std.inflate x amount of times
+        """
         if isinstance(mask, vs.VideoNode):
             self.errormask_clip = mask
             return self
@@ -167,6 +214,11 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         return self
 
     def double(self, upscaler: Doubler | ScalerT | None = None) -> Self:
+        """
+        Upscales the descaled clip by 2x
+
+        :param upscaler:        Any kind of vsscale scaler. Defaults to Waifu2x.
+        """
         if isinstance(upscaler, Doubler):
             self.doubled = upscaler.double(self.descaled)
         else:
@@ -177,10 +229,21 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         return self
 
     def post_double(self, func: GenericVSFunction) -> Self:
+        """
+        A function to apply any arbitrary function on the doubled clip.
+
+        :param func:    This can be any function that takes a videonode input and returns a videonode.
+                        You are responsible for keeping the format the same.
+        """
         self.doubled = func(self.doubled)
         return self
 
     def downscale(self, downscaler: ScalerT | None = None) -> Self:
+        """
+        Downscales the clip back the size of the original input clip and applies the masks, if any.
+
+        :param downscaler:      Any vsscale scaler to use. Defaults to Linear Hermite.
+        """
         scaler = Hermite(linear=True).ensure_obj(downscaler)
         if not self.doubled:
             raise SyntaxError("Downscale/Final is the last one that should be called in a chain!")
@@ -201,6 +264,12 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         return self
 
     def final(self) -> tuple[Self, vs.VideoNode]:
+        """
+        This is the last function in the chain that also returns the final clip.
+        It internally calls `downscale` if you haven't done so before and then merges the resulting clip with the input chroma, if any.
+
+        :return: A tuple of this class and the resulting final rescale.
+        """
         if not self.upscaled:
             self.downscale()
         return (self, self.funcutil.return_clip(self.upscaled))
