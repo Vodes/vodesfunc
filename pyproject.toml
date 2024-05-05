@@ -1,7 +1,7 @@
 
 [project]
 name = "vodesfunc"
-version = "1.5.1"
+version = "1.6.0"
 description = "Vodes' random Vapoursynth Functions."
 authors = [{ name = "Vodes", email = "vodes.imp@gmail.com" }]
 dependencies = [
