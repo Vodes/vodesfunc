@@ -11,7 +11,7 @@ dependencies = [
     "vskernels>=1.2.0",
     "vstools>=1.6.2",
     "vsmasktools>=1.1.0",
-    "vsmuxtools>=0.0.9"
+    "vsmuxtools>=0.1.0"
 ]
 classifiers = [
     "Natural Language :: English",
