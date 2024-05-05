@@ -44,7 +44,8 @@ class RescaleClips:
 
 class RescaleBuilder(RescaleClips, RescaleNumbers):
     """
-    Proof of concept Builder approach to rescaling.
+    Proof of concept Builder approach to rescaling.\n
+    Mostly ready for single rescale use. Not entirely sure how to handle multiple properly yet.
 
     Doesn't handle FieldBased yet.
     (Do I even have to do anything? Pretty sure vskernels does most of the work nowadays)
@@ -87,10 +88,10 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         :param mode:                Whether to descale only height, only width, or both.
                                     "h" or "w" respectively for the former two.
 
-        :param border_handling:     Adjust the way the clip is padded internally during the scaling process. Accepted values are:
-                                    0: Assume the image was resized with mirror padding.
-                                    1: Assume the image was resized with zero padding.
-                                    2: Assume the image was resized with extend padding, where the outermost row was extended infinitely far.
+        :param border_handling:     Adjust the way the clip is padded internally during the scaling process. Accepted values are:\n
+                                    0: Assume the image was resized with mirror padding.\n
+                                    1: Assume the image was resized with zero padding.\n
+                                    2: Assume the image was resized with extend padding, where the outermost row was extended infinitely far.\n
                                     Defaults to 0.
 
         :param border_radius:       Radius for the border mask. Only used when border_handling is set to 1 or 2.
