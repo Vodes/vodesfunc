@@ -2,8 +2,8 @@ from typing import Any, Callable
 from vskernels import Catrom, Lanczos
 from vstools import inject_self, vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version
 from vsrgtools.sharp import unsharp_masked
-from .types import PathLike
 from abc import ABC, abstractmethod
+from vsmuxtools import ensure_path_exists, PathLike
 
 
 __all__: list[str] = [
@@ -93,7 +93,7 @@ class Shader_Doubler(Doubler):
 
         :param shaderfile:      The glsl shader used to double the resolution
         """
-        self.shaderfile = shaderfile if isinstance(shaderfile, str) else str(shaderfile.resolve())
+        self.shaderfile = str(ensure_path_exists(shaderfile, self))
 
     def double(self, clip: vs.VideoNode) -> vs.VideoNode:
         y = depth(get_y(clip), 16)
@@ -242,8 +242,8 @@ class Clamped_Doubler(Doubler):
 
     def __init__(
         self,
-        sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode] = False,
-        sharp_doubler: Doubler | str = Shader_Doubler(),
+        sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode],
+        sharp_doubler: Doubler | str,
         ratio: int = 100,
         **kwargs,
     ) -> None:
