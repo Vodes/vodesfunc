@@ -1,9 +1,10 @@
 # vodesfunc
 
-Contains various functions for automation and other stuff I use in my scripts
+Contains various functions for automation and other stuff I use in my scripts.
 
-### This is by no means me trying to be professional and as such, the code will not be treated like it.
-<br>
+Auto generated docs are at https://muxtools.vodes.pw.
+
+#### This is by no means me trying to be professional and as such, the code will not be treated like it.
 
 ## Installation
 
