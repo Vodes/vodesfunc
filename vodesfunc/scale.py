@@ -1,6 +1,6 @@
 from typing import Any, Callable
 from vskernels import Catrom, Lanczos
-from vstools import inject_self, vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version, Transfer
+from vstools import inject_self, vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version
 from vsrgtools.sharp import unsharp_masked
 from .types import PathLike
 from abc import ABC, abstractmethod
@@ -211,7 +211,7 @@ class Waifu2x_Doubler(Doubler):
 
         # Model 0 wants a gray input
         needs_gray = self.w2xargs.get("model", 6) == 0
-        was_444 = pre.format.color_family == vs.YUV and pre.format.subsampling_w == 0 and pre.format.subsampling_h == 0 and not needs_gray
+        was_444 = pre.format.color_family == vs.YUV and pre.format.subsampling_w == 0 and pre.format.subsampling_h == 0 and not needs_gray  # type: ignore
 
         if was_444:
             pad = Catrom().resample(pad, format=vs.RGBS, matrix=Matrix.RGB, matrix_in=Matrix.from_video(pre))

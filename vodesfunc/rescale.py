@@ -6,7 +6,6 @@ from vstools import (
     FunctionUtil,
     get_h,
     get_lowest_value,
-    get_peak_value,
     padder,
     KwargsT,
     get_w,
@@ -14,12 +13,11 @@ from vstools import (
     ColorRange,
     iterate,
 )
-from vskernels import KernelT, Kernel, ScalerT, Scaler, Bilinear, Hermite
-from vsscale import fdescale_args, descale_args
-from vsmasktools import EdgeDetectT, EdgeDetect, KirschTCanny
-from typing import Sequence, Self, Any
+from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite
+from vsscale import fdescale_args
+from vsmasktools import EdgeDetectT, KirschTCanny
+from typing import Self, Any
 from math import ceil
-from dataclasses import dataclass
 
 from .scale import Doubler
 

@@ -1,4 +1,5 @@
 from vstools import vs, core, depth, get_y
+from typing import Any
 from functools import partial
 
 __all__ = ["dirty_prop_set"]
@@ -8,9 +9,9 @@ def dirty_prop_set(
     clip: vs.VideoNode,
     threshold: int = 1100,
     luma_scaling: int = 24,
-    prop_name: str = None,
-    src_prop_val: any = None,
-    bbm_prop_val: any = None,
+    prop_name: str | None = None,
+    src_prop_val: Any | None = None,
+    bbm_prop_val: Any | None = None,
     debug_output: bool = False,
 ) -> list[vs.VideoNode]:
     """
@@ -28,11 +29,11 @@ def dirty_prop_set(
     def _select_frame(n: int, f: vs.VideoFrame, clip_a: vs.VideoNode, clip_b: vs.VideoNode) -> vs.VideoNode:
         plane_stats_average = f.props["PlaneStatsAverage"]
         # print(f"Frame {n}: {plane_stats_average:.20f}")
-        return clip_b if plane_stats_average > 0.00010 else clip_a
+        return clip_b if plane_stats_average > 0.00010 else clip_a  # type: ignore
 
     def _get_mask(n: int, f: vs.VideoFrame, clip_a: vs.VideoNode, clip_b: vs.VideoNode) -> vs.VideoNode:
         brightness = f.props["PlaneStatsAverage"]
-        weighted_thr = threshold * (1 - (1 - brightness) ** (brightness**2 * luma_scaling))
+        weighted_thr = threshold * (1 - (1 - brightness) ** (brightness**2 * luma_scaling))  # type: ignore
         if debug_output:
             print(f"Frame {n}: Average Brightness - {brightness:.20f}, Weighted - {weighted_thr:.20f}")
         return core.std.Expr([clip_a, clip_b], [f"y x - {weighted_thr} > 65536 0 ?", ""])

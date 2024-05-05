@@ -4,14 +4,13 @@ from vstools import (
     Keyframes,
     get_depth,
     vs,
-    core,
     FrameRangesN,
     normalize_ranges_to_list,
     normalize_list_to_ranges,
     FrameRangeN,
 )
 from stgpytools import SoftRange
-from muxtools import get_executable, PathLike, VideoFile, warn, make_output, ensure_path_exists, info, debug, uniquify_path
+from muxtools import get_executable, PathLike, VideoFile, warn, make_output, ensure_path_exists, info, debug
 from vsmuxtools.video.encoders import VideoEncoder
 from dataclasses import dataclass
 import shlex

@@ -1,11 +1,17 @@
-from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join
+from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT
 from vsrgtools import contrasharpening
 
 __all__ = ["VMDegrain", "schizo_denoise"]
 
 
 def VMDegrain(
-    src: vs.VideoNode, thSAD: int = 60, prefilter: vs.VideoNode | int = 2, smooth: bool = True, block_size: int = 32, overlap: int = 16, **kwargs
+    src: vs.VideoNode,
+    thSAD: int = 60,
+    prefilter: vs.VideoNode | int = 2,
+    smooth: bool = True,
+    block_size: int = 32,
+    overlap: int = 16,
+    **kwargs: KwargsT,
 ) -> vs.VideoNode:
     """
     Just some convenience function for mvtools with a useable preset and temporal smoothing.
@@ -21,7 +27,7 @@ def VMDegrain(
     if isinstance(prefilter, int):
         prefilter = Prefilter(prefilter)
     y = depth(get_y(src), 16)
-    d_args = dict(
+    d_args = KwargsT(
         prefilter=prefilter,
         thSAD=thSAD,
         block_size=block_size,
@@ -40,7 +46,7 @@ def VMDegrain(
         out = out.ttmpsm.TTempSmooth(maxr=1, thresh=1, mdiff=0, strength=1)
 
     out = depth(out, get_depth(src))
-    return out if src.format.color_family == vs.GRAY else join(out, src)
+    return out if src.format.color_family == vs.GRAY else join(out, src)  # type: ignore
 
 
 def schizo_denoise(
@@ -73,7 +79,7 @@ def schizo_denoise(
 
     :return:            Denoised clip
     """
-    if src.format.color_family != vs.YUV:
+    if src.format.color_family != vs.YUV:  # type: ignore
         raise ValueError("schizo_denoise: This function expects a full YUV clip.")
 
     if not isinstance(radius, list):
@@ -97,10 +103,10 @@ def schizo_denoise(
     if len(sigma) == 3:
         clip_u = nlmfunc(clip, a=nlm_a, d=radius[1], h=sigma[1], channels="U")
         clip_v = nlmfunc(clip, a=nlm_a, d=radius[1], h=sigma[2], channels="V")
-        nlm = join(get_y(clip), get_u(clip_u), get_v(clip_v))
+        nlm = join(get_y(clip), get_u(clip_u), get_v(clip_v))  # type: ignore
     else:
         clip_uv = nlmfunc(clip, a=nlm_a, d=radius[1], h=sigma[1], channels="UV")
-        nlm = join(clip, clip_uv)
+        nlm = join(clip, clip_uv)  # type: ignore
 
     # 'Extract' possible bm3d args before passing kwargs to mvtools :)
     bm3dargs = dict(
@@ -128,7 +134,7 @@ def schizo_denoise(
 
     bm3d = bm3dfunc.BM3Dv2(depth(y, 32), depth(mv, 32), sigma[0], radius=radius[0], **bm3dargs)
 
-    out = join(depth(bm3d, 16), nlm)
+    out = join(depth(bm3d, 16), nlm)  # type: ignore
     out = depth(out, get_depth(src))
     if csharp != False:
         out = contrasharpening(out, src, mode=3 if csharp == True else csharp)
