@@ -47,8 +47,22 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
     Proof of concept Builder approach to rescaling.\n
     Mostly ready for single rescale use. Not entirely sure how to handle multiple properly yet.
 
-    Doesn't handle FieldBased yet.
+    Doesn't handle FieldBased yet.\n
     (Do I even have to do anything? Pretty sure vskernels does most of the work nowadays)
+
+    Example usage:
+    ```py
+    builder, rescaled = (
+        RescaleBuilder(clip)
+        .descale(Bilinear, 843.75, base_height=846)
+        .double()
+        .errormask(0.0975)
+        .linemask()
+        .post_double(lambda x: aa_dehalo(x)) # Or a function like post_double(aa_dehalo)
+        .downscale(Hermite(linear=True))
+        .final()
+    )
+    ```
     """
 
     funcutil: FunctionUtil
