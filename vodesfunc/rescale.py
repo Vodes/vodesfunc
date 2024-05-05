@@ -36,7 +36,7 @@ class RescaleNumbers:
 class RescaleClips:
     descaled: vs.VideoNode
     rescaled: vs.VideoNode
-    upscaled: vs.VideoNode
+    upscaled: vs.VideoNode | None = None
     doubled: vs.VideoNode | None = None
     linemask_clip: vs.VideoNode | None = None
     errormask_clip: vs.VideoNode | None = None
