@@ -286,6 +286,9 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         """
         if not self.upscaled:
             self.downscale()
+        if not self.upscaled:
+            raise TypeError("No downscaled clip has been generated yet!")
+
         return (self, self.funcutil.return_clip(self.upscaled))
 
     def _process_mask(
