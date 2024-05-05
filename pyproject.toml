@@ -1,7 +1,7 @@
 
 [project]
 name = "vodesfunc"
-version = "1.6.0"
+version = "1.6.1"
 description = "Vodes' random Vapoursynth Functions."
 authors = [{ name = "Vodes", email = "vodes.imp@gmail.com" }]
 dependencies = [
@@ -17,13 +17,13 @@ classifiers = [
     "Natural Language :: English",
     "Intended Audience :: Developers",
     "Intended Audience :: End Users/Desktop",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Operating System :: OS Independent",
     "Typing :: Typed",
     "Topic :: Multimedia :: Video",
     "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MPL 2.0" }
 
