@@ -6,11 +6,11 @@ description = "Vodes' random Vapoursynth Functions."
 authors = [{ name = "Vodes", email = "vodes.imp@gmail.com" }]
 dependencies = [
     "Vapoursynth>=61",
-    "vsscale>=1.0.1",
-    "vsrgtools>=1.3.0",
-    "vskernels>=1.2.0",
-    "vstools>=1.6.2",
-    "vsmasktools>=1.1.0",
+    "vsscale>=2.0.0",
+    "vsrgtools>=1.6.1",
+    "vskernels>=3.0.1",
+    "vstools>=3.0.0",
+    "vsmasktools>=1.2.0",
     "vsmuxtools>=0.1.0"
 ]
 classifiers = [
@@ -34,3 +34,20 @@ build-backend = "setuptools.build_meta"
 [project.urls]
 "Source Code" = "https://github.com/Vodes/vodesfunc"
 "Contact" = "https://discord.gg/Kf94Nv6WVN"
+
+[tool.ruff]
+line-length = 150
+indent-width = 4
+target-version = "py310"
+
+[tool.ruff.lint]
+ignore = ["E722"]
+fixable = ["F541", "F401", "E712", "E711"]
+exclude = ["__init__.py"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = false

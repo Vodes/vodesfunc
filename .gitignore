@@ -1,5 +1,4 @@
 __pycache__/
-.vscode/
 .mypy-cache/
 *egg-info/
 build/
