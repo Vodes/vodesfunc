@@ -1,15 +1,11 @@
-from typing import Any, Callable
+from typing import Any
 from vskernels import Catrom, Lanczos
 from vstools import inject_self, vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version
-from vsrgtools.sharp import unsharp_masked
 from abc import ABC, abstractmethod
-from vsmuxtools import ensure_path_exists, PathLike
 
 
 __all__: list[str] = [
     "NNEDI_Doubler",
-    "Clamped_Doubler",
-    "Shader_Doubler",
     "Waifu2x_Doubler",
     "Lanczos_PreSS",
 ]
@@ -82,27 +78,6 @@ class NNEDI_Doubler(Doubler):
             doubled_y = doubled_y.resize.Bicubic(src_top=0.5, src_left=0.5)
 
         return doubled_y.std.CopyFrameProps(y)
-
-
-class Shader_Doubler(Doubler):
-    shaderfile: str
-
-    def __init__(self, shaderfile: PathLike = r"C:\FSRCNNX_x2_56-16-4-1.glsl") -> None:
-        """
-        Simple utility class for doubling a clip using a glsl shader
-
-        :param shaderfile:      The glsl shader used to double the resolution
-        """
-        self.shaderfile = str(ensure_path_exists(shaderfile, self))
-
-    def double(self, clip: vs.VideoNode) -> vs.VideoNode:
-        y = depth(get_y(clip), 16)
-        filler_chroma = core.std.BlankClip(y, format=vs.YUV444P16)
-        doubled = core.std.ShufflePlanes([y, filler_chroma], [0, 1, 2], vs.YUV).placebo.Shader(
-            self.shaderfile, filter="box", width=y.width * 2, height=y.height * 2
-        )
-        doubled_y = get_y(doubled)
-        return depth(doubled_y, get_depth(clip))
 
 
 class Waifu2x_Doubler(Doubler):
@@ -234,75 +209,6 @@ class Waifu2x_Doubler(Doubler):
             up = up.std.Expr("x 0.5 255 / +")
 
         return depth(up, get_depth(clip)).std.CopyFrameProps(pre)
-
-
-class Clamped_Doubler(Doubler):
-    sharp_doubler: Doubler
-    sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode] | None = None
-
-    def __init__(
-        self,
-        sharpen_smooth: bool | vs.VideoNode | Callable[[vs.VideoNode], vs.VideoNode],
-        sharp_doubler: Doubler | str,
-        ratio: int = 100,
-        **kwargs,
-    ) -> None:
-        """
-        Simple utility class for doubling a clip using fsrcnnx / any shader clamped to nnedi.
-        Using sharpen will be basically the same as the zastin profile in varde's fsrcnnx upscale.
-        Not sharpening will on the other hand be the same as the slow profile.
-
-        :param sharpen_smooth:  Sharpened "smooth upscale" clip or a sharpener function. Will use z4usm if True.
-                                Uses the other mode if False or None.
-        :param sharp_doubler:   The doubler used for the sharp upscale. Defaults to Shader_Doubler (which defaults to fsrcnnx)
-        :param ratio:           Does a weighted average of the clamped and nnedi clips.
-                                The higher, the more of the clamped clip will be used.
-        :param kwargs:          You can pass all kinds of stuff here, ranging from the default sharpener params to nnedi args.
-                                z4usm params: radius (default 2), strength (default 35)
-                                nnedi params: see `NNEDI_Doubler`
-                                overshoot, undershoot for non-sharpen mode (defaults to ratio / 100)
-        """
-        self.sharp_doubler = Shader_Doubler(sharp_doubler) if isinstance(sharp_doubler, str) else sharp_doubler
-        self.sharpen_smooth = sharpen_smooth
-
-        if ratio > 100 or ratio < 1:
-            raise ValueError("Clamped_Doubler: ratio should be a value between 1 and 100")
-        self.ratio = ratio
-        self.kwargs = kwargs
-
-    def double(self, clip: vs.VideoNode) -> vs.VideoNode:
-        y = depth(get_y(clip), 16)
-
-        overshoot = self.kwargs.pop("overshoot", self.ratio / 100)
-        undershoot = self.kwargs.pop("undershoot", overshoot)
-        radius = self.kwargs.pop("radius", 2)
-        strength = self.kwargs.pop("strength", 35)
-
-        smooth = NNEDI_Doubler(**self.kwargs).double(y)
-        shader = self.sharp_doubler.double(y)
-
-        if self.sharpen_smooth != None and self.sharpen_smooth != False:
-            if isinstance(self.sharpen_smooth, vs.VideoNode):
-                sharpened_smooth = self.sharpen_smooth
-            elif isinstance(self.sharpen_smooth, Callable):
-                sharpened_smooth = self.sharpen_smooth(smooth)
-            elif self.sharpen_smooth == True:
-                sharpened_smooth = unsharp_masked(smooth, radius, strength)
-
-            clamped = core.std.Expr([smooth, shader, sharpened_smooth], "x y z min max y z max min")
-            if self.ratio != 100:
-                clamped = core.std.Expr([clamped, smooth], f"{self.ratio / 100} x * {1 - (self.ratio / 100)} y * +")
-        else:
-            upscaled = core.std.Expr([shader, smooth], "x {ratio} * y 1 {ratio} - * +".format(ratio=self.ratio / 100))
-            dark_limit = core.std.Minimum(smooth)
-            bright_limit = core.std.Maximum(smooth)
-            overshoot *= 2**8
-            undershoot *= 2**8
-            clamped = core.std.Expr(
-                [upscaled, bright_limit, dark_limit],
-                f"x y {overshoot} + > y {overshoot} + x ? z {undershoot} - < z {undershoot} - x y {overshoot} + > y {overshoot} + x ? ?",
-            )
-        return depth(clamped, get_depth(clip))
 
 
 def mod_padding(clip: vs.VideoNode, mod: int = 4, min: int = 4):
