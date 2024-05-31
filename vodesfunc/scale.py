@@ -226,14 +226,16 @@ class Waifu2x_Doubler(Doubler):
 @dataclass
 class GenericOnnxScaler(GenericScaler):
     """
-    Generic scaler class for an onnx model.\n
-    Any kwargs will be passed to the auto-selected backend. Defaults to fp16=True.
+    Generic scaler class for an onnx model.
     """
 
     model: SPathLike | None = None
     """Path to the model."""
     backend: Any | None = None
-    """vs-mlrt backend. Will attempt to autoselect if None."""
+    """
+    vs-mlrt backend. Will attempt to autoselect the most suitable one with fp16=True if None.\n
+    In order of trt > cuda > nncn > cpu.
+    """
     tiles: int | tuple[int, int] | None = None
     """Splits up the frame into multiple tiles. Helps if you're lacking in vram but models may behave differently."""
 
@@ -245,7 +247,7 @@ class GenericOnnxScaler(GenericScaler):
     @inject_self
     def scale(self, clip: vs.VideoNode, width: int, height: int, shift: tuple[float, float] = (0, 0), **kwargs: KwargsT) -> vs.VideoNode:
         if self.backend is None:
-            self.backend = autoselect_backend(kwargs)
+            self.backend = autoselect_backend()
 
         clip_format = get_video_format(clip)
         if clip_format.subsampling_h != 0 or clip_format.subsampling_w != 0:
@@ -282,24 +284,22 @@ class GenericOnnxScaler(GenericScaler):
         return depth(scaled, og_depth)
 
 
-def autoselect_backend(backend_args: KwargsT) -> Any:
+def autoselect_backend() -> Any:
     from vsmlrt import Backend
-
-    fp16 = backend_args.pop("fp16", True)
 
     cuda = get_nvidia_version() is not None
     if cuda:
         if hasattr(core, "trt"):
-            return Backend.TRT(fp16=fp16, **backend_args)
+            return Backend.TRT(fp16=True)
         elif hasattr(core, "ort"):
-            return Backend.ORT_CUDA(fp16=fp16, **backend_args)
+            return Backend.ORT_CUDA(fp16=True)
         else:
-            return Backend.OV_GPU(fp16=fp16, **backend_args)
+            return Backend.OV_GPU(fp16=True)
     else:
         if hasattr(core, "ncnn"):
-            return Backend.NCNN_VK(fp16=fp16, **backend_args)
+            return Backend.NCNN_VK(fp16=True)
         else:
-            return Backend.ORT_CPU(fp16=fp16, **backend_args) if hasattr(core, "ort") else Backend.OV_CPU(fp16=fp16, **backend_args)
+            return Backend.ORT_CPU(fp16=True) if hasattr(core, "ort") else Backend.OV_CPU(fp16=True)
 
 
 def mod_padding(clip: vs.VideoNode, mod: int = 4, min: int = 4):
