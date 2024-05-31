@@ -1,14 +1,13 @@
 from typing import Any
 from vskernels import Catrom, Lanczos
-from vstools import inject_self, vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version
+from vstools import inject_self, vs, core, depth, get_depth, get_y, Matrix, KwargsT, get_nvidia_version, get_video_format, PlanesT, expect_bits
+from vsscale import GenericScaler
+from muxtools import PathLike, ensure_path_exists
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 
-__all__: list[str] = [
-    "NNEDI_Doubler",
-    "Waifu2x_Doubler",
-    "Lanczos_PreSS",
-]
+__all__: list[str] = ["NNEDI_Doubler", "Waifu2x_Doubler", "Lanczos_PreSS", "GenericOnnxScaler"]
 
 
 class Lanczos_PreSS(Lanczos):
@@ -209,6 +208,59 @@ class Waifu2x_Doubler(Doubler):
             up = up.std.Expr("x 0.5 255 / +")
 
         return depth(up, get_depth(clip)).std.CopyFrameProps(pre)
+
+
+@dataclass
+class GenericOnnxScaler(GenericScaler):
+    """
+    Generic scaler class for an onnx model.
+    """
+
+    model: PathLike | None = None
+    """Path to the model."""
+    backend: Any | None = None
+    """vs-mlrt backend. Will attempt to autoselect if None."""
+    fp16: bool = True
+    """Use 16 bit float processing for less accuracy but a lot more speed. Will be overwritten by the backend if any was passed."""
+    device_id: int = 0
+    """GPU Device ID to use. Will be overwritten by the backend if any was passed."""
+
+    _static_kernel_radius = 2
+
+    @inject_self
+    def scale(self, clip: vs.VideoNode, width: int, height: int, shift: tuple[float, float] = (0, 0), **kwargs: KwargsT) -> vs.VideoNode:
+        if self.backend is None:
+            self.backend = autoselect_backend(self.fp16, self.device_id)
+
+        clip_format = get_video_format(clip)
+        if clip_format.subsampling_h != 0 or clip_format.subsampling_w != 0:
+            raise ValueError("GenericOnnxScaler: This scaler requires non subsampled input!")
+
+        wclip, og_depth = expect_bits(clip, 32)
+
+        from vsmlrt import inference
+
+        scaled = inference(wclip, network_path=ensure_path_exists(self.model, self), backend=self.backend, **kwargs)
+        scaled = self._finish_scale(scaled, wclip, width, height, shift)
+        return depth(scaled, og_depth)
+
+
+def autoselect_backend(fp16: bool, device_id: int) -> Any:
+    from vsmlrt import Backend
+
+    cuda = get_nvidia_version() is not None
+    if cuda:
+        if hasattr(core, "trt"):
+            return Backend.TRT(fp16=fp16, device_id=device_id)
+        elif hasattr(core, "ort"):
+            return Backend.ORT_CUDA(fp16=fp16, device_id=device_id)
+        else:
+            return Backend.OV_GPU(fp16=fp16, device_id=device_id)
+    else:
+        if hasattr(core, "ncnn"):
+            return Backend.NCNN_VK(fp16=fp16, device_id=device_id)
+        else:
+            return Backend.ORT_CPU(fp16=fp16) if hasattr(core, "ort") else Backend.OV_CPU(fp16=fp16)
 
 
 def mod_padding(clip: vs.VideoNode, mod: int = 4, min: int = 4):
