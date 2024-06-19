@@ -4,20 +4,17 @@ from vstools import (
     depth,
     get_depth,
     FunctionUtil,
-    get_h,
-    get_lowest_value,
-    padder,
     KwargsT,
     get_w,
     GenericVSFunction,
     ColorRange,
     iterate,
+    expect_bits,
 )
-from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite
+from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite, Bicubic, Lanczos
 from vsscale import fdescale_args
 from vsmasktools import EdgeDetectT, KirschTCanny
-from typing import Self, Any
-from math import ceil
+from typing import Self
 
 from .scale import Doubler
 
@@ -65,11 +62,8 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
 
     funcutil: FunctionUtil
     kernel: Kernel
-    post_crop: KwargsT | None = None
+    post_crop: KwargsT = KwargsT()
     rescale_args: KwargsT = KwargsT()
-    shift: tuple[float, float] = (0, 0)
-    border_handling: int = 0
-    border_radius: int | None = None
 
     def __init__(self, clip: vs.VideoNode):
         self.funcutil = FunctionUtil(clip, self.__class__.__name__, planes=0, color_family=(vs.YUV, vs.GRAY), bitdepth=(16, 32))
@@ -77,14 +71,12 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
     def descale(
         self,
         kernel: KernelT,
-        height: float,
-        width: float | None = None,
+        width: int | float,
+        height: int | float,
         base_height: int | None = None,
         base_width: int | None = None,
         shift: tuple[float, float] = (0, 0),
         mode: str = "hw",
-        border_handling: int = 0,
-        border_radius: int | None = None,
     ) -> Self:
         """
         Performs descale and rescale (with the same kernel).
@@ -111,36 +103,18 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         """
         clip = self.funcutil.work_clip
         self.kernel = Kernel.ensure_obj(kernel)
-        self.shift = shift
-        self.border_handling = self.kernel.kwargs.pop("border_handling", border_handling)
-        self.border_radius = border_radius
 
-        if float(height).is_integer():
-            if not width:
-                width = get_w(height, clip)
-            self.width = int(width) if "w" in mode else clip.width
-            self.height = int(height) if "h" in mode else clip.height
-            self.descaled = self.kernel.descale(
-                clip,
-                self.width,
-                self.height,
-                shift=shift,
-                border_handling=self.border_handling,
-            )
-            self.rescaled = perform_rescale(self)
-        else:
-            sanitized_shift = (shift[0] if shift[0] else None, shift[1] if shift[1] else None)
-            args, self.post_crop = fdescale_args(clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode)
-            _, self.rescale_args = fdescale_args(
-                clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode, up_rate=1
-            )
-            self.height = args.get("src_height", clip.height)
-            self.width = args.get("src_width", clip.width)
-            self.base_height = base_height
-            self.base_width = base_width
+        sanitized_shift = (shift[0] if shift[0] else None, shift[1] if shift[1] else None)
+        args, self.post_crop = fdescale_args(clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode)
+        _, self.rescale_args = fdescale_args(clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode, up_rate=1)
+        print("Descale Args:", args, "Rescale Args:", self.rescale_args)
+        self.height = args.get("src_height", clip.height)
+        self.width = args.get("src_width", clip.width)
+        self.base_height = base_height
+        self.base_width = base_width
 
-            self.descaled = self.kernel.descale(clip, border_handling=self.border_handling, **args)
-            self.rescaled = perform_rescale(self, **self.rescale_args)
+        self.descaled = self.kernel.descale(clip, **args)
+        self.rescaled = descale_rescale(self, self.descaled, width=clip.width, height=clip.height, **self.rescale_args)
         return self
 
     def post_descale(self, func: GenericVSFunction) -> Self:
@@ -176,8 +150,6 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         """
         if isinstance(mask, vs.VideoNode):
             self.linemask_clip = mask
-            if self.border_handling:
-                self.linemask_clip = self._crop_mask_bord(self.linemask_clip)
             return self
         edgemaskFunc = KirschTCanny.ensure_obj(mask)
 
@@ -190,9 +162,6 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
             self.linemask_clip = edgemaskFunc.edgemask(self.funcutil.work_clip, **kwargs)
 
         self.linemask_clip = self._process_mask(self.linemask_clip, maximum_iter, inflate_iter, expand)
-
-        if self.border_handling:
-            self.linemask_clip = self._crop_mask_bord(self.linemask_clip)
 
         return self
 
@@ -217,9 +186,6 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         err_mask = err_mask.rgvs.RemoveGrain(mode=6)
         err_mask = self._process_mask(err_mask, maximum_iter, inflate_iter, expand)
         self.errormask_clip = depth(err_mask, get_depth(self.funcutil.work_clip))
-
-        if self.border_handling:
-            self.errormask_clip = self._crop_mask_bord(self.errormask_clip)
 
         return self
 
@@ -260,10 +226,7 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         if not self.doubled:
             raise SyntaxError("Downscale/Final is the last one that should be called in a chain!")
         wclip = self.funcutil.work_clip
-        if self.post_crop:
-            self.upscaled = scaler.scale(self.doubled, wclip.width, wclip.height, **self.post_crop)
-        else:
-            self.upscaled = scaler.scale(self.doubled, wclip.width, wclip.height, (self.shift[0] * 2, self.shift[1] * 2))
+        self.upscaled = scaler.scale(self.doubled, wclip.width, wclip.height, **self.post_crop)
 
         if isinstance(self.errormask_clip, vs.VideoNode) and isinstance(self.linemask_clip, vs.VideoNode):
             self.final_mask = core.std.Expr([self.linemask_clip.std.Limiter(), self.errormask_clip], "x y -")
@@ -307,100 +270,21 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
 
         return mask
 
-    def _crop_mask_bord(self, mask: vs.VideoNode, color: float = 0.0) -> vs.VideoNode:
-        if not hasattr(self, "_bord_crop_args"):
-            self._bord_crop_args = get_border_crop(self)
 
-        return mask.std.Crop(*self._bord_crop_args).std.AddBorders(*self._bord_crop_args, color=color)
-
-    @property
-    def _kernel_window(self) -> int:
-        if (bord_rad := self.border_radius) is None:
-            try:
-                bord_rad = self.kernel.kernel_radius
-            except (AttributeError, NotImplementedError):
-                bord_rad = 2
-
-        return bord_rad
-
-
-def perform_rescale(builder: RescaleBuilder, **kwargs: Any) -> vs.VideoNode:
-    input_clip = builder.funcutil.work_clip
-    clip = builder.descaled
-    match int(builder.border_handling):
-        case 1:
-            clip = clip.std.AddBorders(
-                *((0, 0) if builder.width == input_clip.width else (10, 10)),
-                *((0, 0) if builder.height == input_clip.height else (10, 10)),
-                get_lowest_value(clip, False, ColorRange.from_video(clip)),
-            )
-        case 2:
-            clip = padder(
-                clip,
-                *((0, 0) if builder.width == input_clip.width else (10, 10)),
-                *((0, 0) if builder.height == input_clip.height else (10, 10)),
-                reflect=False,
-            )
-        case _:
-            pass
-
-    shift_top = kwargs.pop("src_top", False) or builder.shift[0]
-    shift_left = kwargs.pop("src_left", False) or builder.shift[1]
-
-    shift = [
-        shift_top + (builder.height != input_clip.height and builder.border_handling) * 10,
-        shift_left + (builder.width != input_clip.width and builder.border_handling) * 10,
-    ]
-
-    src_width = kwargs.pop("src_width", clip.width)
-    src_height = kwargs.pop("src_height", clip.height)
-
-    return builder.kernel.scale(
-        clip,
-        input_clip.width,
-        input_clip.height,
-        shift,  # type: ignore # Why?
-        src_width=src_width - ((clip.width - builder.width) if float(builder.width).is_integer() else 0),
-        src_height=src_height - ((clip.height - builder.height) if float(builder.width).is_integer() else 0),
-    )
-
-
-def get_border_crop(builder: RescaleBuilder) -> tuple:
-    input_clip = builder.funcutil.work_clip
-    # fmt: off
-    if builder.height == input_clip.height:
-        vertical_crop = (0, 0)
+def descale_rescale(builder: RescaleBuilder, clip: vs.VideoNode, **kwargs: KwargsT) -> vs.VideoNode:
+    kernel_args = KwargsT(border_handling=builder.kernel.kwargs.get("border_handling", 0))
+    if isinstance(builder.kernel, Bilinear):
+        kernel_function = core.descale.Bilinear
+    elif isinstance(builder.kernel, Bicubic) or issubclass(builder.kernel.__class__, Bicubic):
+        kernel_function = core.descale.Bicubic
+        kernel_args.update({"b": builder.kernel.b, "c": builder.kernel.c})
+    elif isinstance(builder.kernel, Lanczos):
+        kernel_function = core.descale.Lanczos
+        kernel_args.update({"taps": builder.kernel.taps})
     else:
-        base_height = builder.base_height or get_h(builder.base_width, builder.descaled) if builder.base_width else builder.height
-        src_top = builder.rescale_args.get("src_top", False) or builder.shift[0]
-        top = max(ceil(
-            (-(builder.height - 1) / 2 + builder._kernel_window - src_top - 1)
-            * input_clip.height / builder.height + (input_clip.height - 1) / 2
-        ), 0)
+        # I'm just lazy idk
+        raise ValueError(f"{builder.kernel.__class__} is not supported for rescaling!")
 
-        bottom = max(ceil(
-            (-(builder.height - 1) / 2 + builder._kernel_window - (base_height - builder.height - src_top) - 1)
-            * input_clip.height / builder.height + (input_clip.height - 1) / 2
-        ), 0)
-
-        vertical_crop = (top, bottom)
-
-    if builder.width == input_clip.width:
-        horizontal_crop = (0, 0)
-    else:
-        base_width = builder.base_width or get_w(builder.base_height, builder.descaled) if builder.base_height else builder.width
-        src_left = builder.rescale_args.get("src_left", False) or builder.shift[1]
-
-        left = max(ceil(
-            (-(builder.width - 1) / 2 + builder._kernel_window - src_left - 1)
-            * input_clip.width / builder.width + (input_clip.width - 1) / 2
-        ), 0)
-
-        right = max(ceil(
-            (-(builder.width - 1) / 2 + builder._kernel_window - (base_width - builder.width - src_left) - 1)
-            * input_clip.width / builder.width + (input_clip.width - 1) / 2
-        ), 0)
-
-        horizontal_crop = (left, right)
-    # fmt: on
-    return horizontal_crop + vertical_crop
+    kernel_args.update(kwargs)
+    clip, bits = expect_bits(clip, 32)
+    return depth(kernel_function(clip, **kernel_args), bits)
