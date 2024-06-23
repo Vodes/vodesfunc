@@ -30,7 +30,12 @@ class RescaleNumbers:
     base_width: int | None
 
 
-class RescaleClips:
+class RescaleBase:
+    funcutil: FunctionUtil
+    kernel: Kernel
+    post_crop: KwargsT = KwargsT()
+    rescale_args: KwargsT = KwargsT()
+
     descaled: vs.VideoNode
     rescaled: vs.VideoNode
     upscaled: vs.VideoNode | None = None
@@ -39,7 +44,7 @@ class RescaleClips:
     errormask_clip: vs.VideoNode | None = None
 
 
-class RescaleBuilder(RescaleClips, RescaleNumbers):
+class RescaleBuilder(RescaleBase, RescaleNumbers):
     """
     Proof of concept Builder approach to rescaling.\n
     Mostly ready for single rescale use. Not entirely sure how to handle multiple properly yet.
@@ -61,11 +66,6 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
     )
     ```
     """
-
-    funcutil: FunctionUtil
-    kernel: Kernel
-    post_crop: KwargsT = KwargsT()
-    rescale_args: KwargsT = KwargsT()
 
     def __init__(self, clip: vs.VideoNode):
         self.funcutil = FunctionUtil(clip, self.__class__.__name__, planes=0, color_family=(vs.YUV, vs.GRAY), bitdepth=(16, 32))
