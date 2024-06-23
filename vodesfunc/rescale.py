@@ -196,7 +196,7 @@ class RescaleBuilder(RescaleBase, RescaleNumbers):
         self.errormask_clip = self._errormask(mask, maximum_iter, inflate_iter, expand)
         return self
 
-    def zoned_errormask(
+    def errormask_zoned(
         self,
         ranges: FrameRangesN,
         mask: vs.VideoNode | float = 0.05,
