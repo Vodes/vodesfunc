@@ -10,6 +10,8 @@ from vstools import (
     ColorRange,
     iterate,
     expect_bits,
+    replace_ranges,
+    FrameRangesN,
 )
 from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite, Bicubic, Lanczos
 from vsscale import fdescale_args
@@ -165,6 +167,20 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
 
         return self
 
+    def _errormask(
+        self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3, expand: int | tuple[int, int | None] = 0
+    ) -> vs.VideoNode:
+        if isinstance(mask, vs.VideoNode):
+            return mask
+
+        err_mask = core.std.Expr([depth(self.funcutil.work_clip, 32), depth(self.rescaled, 32)], f"x y - abs {mask} < 0 1 ?")
+        err_mask = depth(err_mask, 16, range_out=ColorRange.FULL, range_in=ColorRange.FULL)
+        err_mask = err_mask.rgvs.RemoveGrain(mode=6)
+        err_mask = self._process_mask(err_mask, maximum_iter, inflate_iter, expand)
+        err_mask = depth(err_mask, get_depth(self.funcutil.work_clip))
+
+        return err_mask
+
     def errormask(
         self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3, expand: int | tuple[int, int | None] = 0
     ) -> Self:
@@ -177,16 +193,25 @@ class RescaleBuilder(RescaleClips, RescaleNumbers):
         :param expand:          Apply an ellipse morpho expand with the passed amount.
                                 Can be a tuple of (horizontal, vertical) or a single value for both.
         """
-        if isinstance(mask, vs.VideoNode):
-            self.errormask_clip = mask
+        self.errormask_clip = self._errormask(mask, maximum_iter, inflate_iter, expand)
+        return self
+
+    def zoned_errormask(
+        self,
+        ranges: FrameRangesN,
+        mask: vs.VideoNode | float = 0.05,
+        maximum_iter: int = 2,
+        inflate_iter: int = 3,
+        expand: int | tuple[int, int | None] = 0,
+    ) -> Self:
+        """
+        A function to apply a basic error mask to the final output.\n
+        But with this rfs'd to certain ranges.
+        """
+        if not ranges:
             return self
-
-        err_mask = core.std.Expr([depth(self.funcutil.work_clip, 32), depth(self.rescaled, 32)], f"x y - abs {mask} < 0 1 ?")
-        err_mask = depth(err_mask, 16, range_out=ColorRange.FULL, range_in=ColorRange.FULL)
-        err_mask = err_mask.rgvs.RemoveGrain(mode=6)
-        err_mask = self._process_mask(err_mask, maximum_iter, inflate_iter, expand)
-        self.errormask_clip = depth(err_mask, get_depth(self.funcutil.work_clip))
-
+        err_mask = self._errormask(mask, maximum_iter, inflate_iter, expand)
+        self.errormask_clip = replace_ranges(self.errormask_clip, err_mask, ranges)
         return self
 
     def double(self, upscaler: Doubler | ScalerT | None = None) -> Self:
