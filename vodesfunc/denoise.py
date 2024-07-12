@@ -138,4 +138,4 @@ def schizo_denoise(
     out = depth(out, get_depth(src))
     if csharp != False:
         out = contrasharpening(out, src, mode=3 if csharp == True else csharp)
-    return out
+    return out.std.CopyFrameProps(src)
