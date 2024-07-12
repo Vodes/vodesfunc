@@ -109,7 +109,7 @@ class RescaleBuilder(RescaleBase, RescaleNumbers):
         sanitized_shift = (shift[0] if shift[0] else None, shift[1] if shift[1] else None)
         args, self.post_crop = fdescale_args(clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode)
         _, self.rescale_args = fdescale_args(clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode, up_rate=1)
-        print("Descale Args:", args, "Rescale Args:", self.rescale_args)
+
         self.height = args.get("src_height", clip.height)
         self.width = args.get("src_width", clip.width)
         self.base_height = base_height
