@@ -5,13 +5,13 @@ from vstools import (
     get_depth,
     FunctionUtil,
     KwargsT,
-    get_w,
     GenericVSFunction,
     ColorRange,
     iterate,
     expect_bits,
     replace_ranges,
     FrameRangesN,
+    get_peak_value,
 )
 from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite, Bicubic, Lanczos
 from vsscale import fdescale_args
@@ -28,13 +28,15 @@ class RescaleNumbers:
     width: float | int
     base_height: int | None
     base_width: int | None
+    border_handling: int = 0
 
 
-class RescaleBase:
+class RescaleBase(RescaleNumbers):
     funcutil: FunctionUtil
     kernel: Kernel
     post_crop: KwargsT = KwargsT()
     rescale_args: KwargsT = KwargsT()
+    descale_func_args: KwargsT = KwargsT()
 
     descaled: vs.VideoNode
     rescaled: vs.VideoNode
@@ -44,7 +46,7 @@ class RescaleBase:
     errormask_clip: vs.VideoNode | None = None
 
 
-class RescaleBuilder(RescaleBase, RescaleNumbers):
+class RescaleBuilder(RescaleBase):
     """
     Proof of concept Builder approach to rescaling.\n
     Mostly ready for single rescale use. Not entirely sure how to handle multiple properly yet.
@@ -93,15 +95,6 @@ class RescaleBuilder(RescaleBase, RescaleNumbers):
         :param shift:               A custom shift to be applied
         :param mode:                Whether to descale only height, only width, or both.
                                     "h" or "w" respectively for the former two.
-
-        :param border_handling:     Adjust the way the clip is padded internally during the scaling process. Accepted values are:\n
-                                    0: Assume the image was resized with mirror padding.\n
-                                    1: Assume the image was resized with zero padding.\n
-                                    2: Assume the image was resized with extend padding, where the outermost row was extended infinitely far.\n
-                                    Defaults to 0.
-
-        :param border_radius:       Radius for the border mask. Only used when border_handling is set to 1 or 2.
-                                    Defaults to kernel radius if possible, else 2.
         """
         clip = self.funcutil.work_clip
         self.kernel = Kernel.ensure_obj(kernel)
@@ -114,6 +107,10 @@ class RescaleBuilder(RescaleBase, RescaleNumbers):
         self.width = args.get("src_width", clip.width)
         self.base_height = base_height
         self.base_width = base_width
+        self.border_handling = kernel.kwargs.pop("border_handling", 0)
+
+        args.update({"border_handling": self.border_handling})
+        self.descale_func_args.update(**args)
 
         self.descaled = self.kernel.descale(clip, **args)
         self.rescaled = descale_rescale(self, self.descaled, width=clip.width, height=clip.height, **self.rescale_args)
@@ -137,6 +134,7 @@ class RescaleBuilder(RescaleBase, RescaleNumbers):
         maximum_iter: int = 0,
         inflate_iter: int = 0,
         expand: int | tuple[int, int | None] = 0,
+        kernel_window: int | None = None,
         **kwargs,
     ) -> Self:
         """
@@ -148,6 +146,7 @@ class RescaleBuilder(RescaleBase, RescaleNumbers):
         :param inflate_iter:    Apply std.inflate x amount of times
         :param expand:          Apply an ellipse morpho expand with the passed amount.
                                 Can be a tuple of (horizontal, vertical) or a single value for both.
+        :param kernel_window:   To override kernel radius used in case of border_handling being used.
         :param **kwargs:        Any other params to pass to the edgemask creation. For example `lthr` or `hthr`.
         """
         if isinstance(mask, vs.VideoNode):
@@ -164,6 +163,12 @@ class RescaleBuilder(RescaleBase, RescaleNumbers):
             self.linemask_clip = edgemaskFunc.edgemask(self.funcutil.work_clip, **kwargs)
 
         self.linemask_clip = self._process_mask(self.linemask_clip, maximum_iter, inflate_iter, expand)
+
+        if self.border_handling:
+            from .misc import get_border_crop
+
+            borders = get_border_crop(self.funcutil.work_clip, self, kernel_window)
+            self.linemask_clip = self.linemask_clip.std.Crop(*borders).std.AddBorders(*borders, [get_peak_value(self.linemask_clip)])
 
         return self
 
@@ -297,7 +302,7 @@ class RescaleBuilder(RescaleBase, RescaleNumbers):
 
 
 def descale_rescale(builder: RescaleBuilder, clip: vs.VideoNode, **kwargs: KwargsT) -> vs.VideoNode:
-    kernel_args = KwargsT(border_handling=builder.kernel.kwargs.get("border_handling", 0))
+    kernel_args = KwargsT(border_handling=builder.border_handling)
     if isinstance(builder.kernel, Bilinear):
         kernel_function = core.descale.Bilinear
     elif isinstance(builder.kernel, Bicubic) or issubclass(builder.kernel.__class__, Bicubic):

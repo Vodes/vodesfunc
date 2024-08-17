@@ -1,5 +1,5 @@
 """
-    Oh god no
+Oh god no
 """
 
 # flake8: noqa

@@ -41,7 +41,7 @@ class NVENC_H265(VideoEncoder):
     def encode(self, clip: vs.VideoNode, outfile: PathLike | None = None) -> VideoFile:
         bits = get_depth(clip)
         if bits > 10:
-            warn(f"This encoder does not support a bit depth over 10.\nClip will be dithered to 10 bit.", self, 2)
+            warn("This encoder does not support a bit depth over 10.\nClip will be dithered to 10 bit.", self, 2)
             clip = finalize_clip(clip, 10)
             bits = 10
         if self.ensure_props:

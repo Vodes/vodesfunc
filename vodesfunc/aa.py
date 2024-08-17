@@ -3,7 +3,7 @@ from typing import Sequence, Union
 from vsaa import Antialiaser, Eedi3
 from vskernels import Bicubic, Kernel, KernelT, Lanczos, Scaler, ScalerT
 from vsrgtools import unsharp_masked
-from vstools import FrameRangesN, KwargsT, mod2, vs, core, depth, get_y, get_w, join, plane, scale_8bit
+from vstools import FrameRangesN, KwargsT, mod2, vs, core, get_w, join, plane, scale_8bit
 
 from .scale import mod_padding
 
