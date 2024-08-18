@@ -5,6 +5,7 @@ from vstools import (
     get_depth,
     FunctionUtil,
     KwargsT,
+    get_w,
     GenericVSFunction,
     ColorRange,
     iterate,
@@ -12,6 +13,9 @@ from vstools import (
     replace_ranges,
     FrameRangesN,
     get_peak_value,
+    FieldBasedT,
+    FieldBased,
+    CustomValueError,
 )
 from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite, Bicubic, Lanczos
 from vsscale import fdescale_args
@@ -19,34 +23,12 @@ from vsmasktools import EdgeDetectT, KirschTCanny
 from typing import Self
 
 from .scale import Doubler
+from .rescale_ext import RescBuildFB, RescBuildNonFB, descale_rescale
 
 __all__ = ["RescaleBuilder"]
 
 
-class RescaleNumbers:
-    height: float | int
-    width: float | int
-    base_height: int | None
-    base_width: int | None
-    border_handling: int = 0
-
-
-class RescaleBase(RescaleNumbers):
-    funcutil: FunctionUtil
-    kernel: Kernel
-    post_crop: KwargsT = KwargsT()
-    rescale_args: KwargsT = KwargsT()
-    descale_func_args: KwargsT = KwargsT()
-
-    descaled: vs.VideoNode
-    rescaled: vs.VideoNode
-    upscaled: vs.VideoNode | None = None
-    doubled: vs.VideoNode | None = None
-    linemask_clip: vs.VideoNode | None = None
-    errormask_clip: vs.VideoNode | None = None
-
-
-class RescaleBuilder(RescaleBase):
+class RescaleBuilder(RescBuildFB, RescBuildNonFB):
     """
     Proof of concept Builder approach to rescaling.\n
     Mostly ready for single rescale use. Not entirely sure how to handle multiple properly yet.
@@ -80,6 +62,7 @@ class RescaleBuilder(RescaleBase):
         base_height: int | None = None,
         base_width: int | None = None,
         shift: tuple[float, float] = (0, 0),
+        field_based: FieldBasedT | None = None,
         mode: str = "hw",
     ) -> Self:
         """
@@ -95,25 +78,27 @@ class RescaleBuilder(RescaleBase):
         :param shift:               A custom shift to be applied
         :param mode:                Whether to descale only height, only width, or both.
                                     "h" or "w" respectively for the former two.
+        :param field_based:         To descale a cross-converted/interlaced clip.
+                                    Will try to take the prop from the clip if `None` was passed.
         """
         clip = self.funcutil.work_clip
         self.kernel = Kernel.ensure_obj(kernel)
+        self.border_handling = self.kernel.kwargs.pop("border_handling", 0)
+        self.field_based = FieldBased.from_param(field_based) or FieldBased.from_video(clip)
 
-        sanitized_shift = (shift[0] if shift[0] else None, shift[1] if shift[1] else None)
-        args, self.post_crop = fdescale_args(clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode)
-        _, self.rescale_args = fdescale_args(clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode, up_rate=1)
-
-        self.height = args.get("src_height", clip.height)
-        self.width = args.get("src_width", clip.width)
+        self.height = height if "h" in mode else clip.height
+        self.width = width if "w" in mode else clip.width
         self.base_height = base_height
         self.base_width = base_width
-        self.border_handling = kernel.kwargs.pop("border_handling", 0)
 
-        args.update({"border_handling": self.border_handling})
-        self.descale_func_args.update(**args)
+        if (isinstance(width, float) or isinstance(height, float)) and self.field_based.is_inter:
+            raise CustomValueError("Float is not supported for fieldbased descales!", self.descale)
 
-        self.descaled = self.kernel.descale(clip, **args)
-        self.rescaled = descale_rescale(self, self.descaled, width=clip.width, height=clip.height, **self.rescale_args)
+        if self.field_based.is_inter:
+            self._fieldbased_descale(clip, width=self.width, height=self.height, border_handling=self.border_handling)
+        else:
+            self._non_fieldbased_descale(clip, width, height, base_height, base_width, shift, mode)
+
         return self
 
     def post_descale(self, func: GenericVSFunction) -> Self:
@@ -257,7 +242,11 @@ class RescaleBuilder(RescaleBase):
             raise SyntaxError("Downscale/Final is the last one that should be called in a chain!")
         wclip = self.funcutil.work_clip
         self.upscaled = scaler.scale(self.doubled, wclip.width, wclip.height, **self.post_crop)
+        self._apply_masks()
+        return self
 
+    def _apply_masks(self):
+        wclip = self.funcutil.work_clip
         if isinstance(self.errormask_clip, vs.VideoNode) and isinstance(self.linemask_clip, vs.VideoNode):
             self.final_mask = core.std.Expr([self.linemask_clip.std.Limiter(), self.errormask_clip], "x y -")
             self.upscaled = wclip.std.MaskedMerge(self.upscaled, self.final_mask.std.Limiter())
@@ -265,8 +254,6 @@ class RescaleBuilder(RescaleBase):
             self.upscaled = self.upscaled.std.MaskedMerge(wclip, self.errormask_clip.std.Limiter())
         elif isinstance(self.linemask_clip, vs.VideoNode):
             self.upscaled = wclip.std.MaskedMerge(self.upscaled, self.linemask_clip.std.Limiter())
-
-        return self
 
     def final(self) -> tuple[Self, vs.VideoNode]:
         """
@@ -299,22 +286,3 @@ class RescaleBuilder(RescaleBase):
             mask = Morpho.expand(mask, expand[0], expand[1], XxpandMode.ELLIPSE)
 
         return mask
-
-
-def descale_rescale(builder: RescaleBuilder, clip: vs.VideoNode, **kwargs: KwargsT) -> vs.VideoNode:
-    kernel_args = KwargsT(border_handling=builder.border_handling)
-    if isinstance(builder.kernel, Bilinear):
-        kernel_function = core.descale.Bilinear
-    elif isinstance(builder.kernel, Bicubic) or issubclass(builder.kernel.__class__, Bicubic):
-        kernel_function = core.descale.Bicubic
-        kernel_args.update({"b": builder.kernel.b, "c": builder.kernel.c})
-    elif isinstance(builder.kernel, Lanczos):
-        kernel_function = core.descale.Lanczos
-        kernel_args.update({"taps": builder.kernel.taps})
-    else:
-        # I'm just lazy idk
-        raise ValueError(f"{builder.kernel.__class__} is not supported for rescaling!")
-
-    kernel_args.update(kwargs)
-    clip, bits = expect_bits(clip, 32)
-    return depth(kernel_function(clip, **kernel_args), bits)

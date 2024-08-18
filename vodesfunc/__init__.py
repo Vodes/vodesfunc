@@ -4,7 +4,7 @@ Oh god no
 
 # flake8: noqa
 
-from . import aa, misc, noise, scale, denoise, descale, rescale, util, spikefinder
+from . import aa, misc, noise, scale, denoise, descale, rescale, util, spikefinder, rescale_ext
 from .aa import *
 from .misc import *
 from .noise import *

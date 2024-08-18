@@ -3,7 +3,7 @@ from typing import Any
 from math import ceil
 from functools import partial
 
-from .rescale import RescaleBase
+from .rescale_ext import RescaleBase
 
 __all__ = ["dirty_prop_set"]
 
