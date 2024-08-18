@@ -4,12 +4,9 @@ from vstools import (
     depth,
     get_depth,
     FunctionUtil,
-    KwargsT,
-    get_w,
     GenericVSFunction,
     ColorRange,
     iterate,
-    expect_bits,
     replace_ranges,
     FrameRangesN,
     get_peak_value,
@@ -17,13 +14,12 @@ from vstools import (
     FieldBased,
     CustomValueError,
 )
-from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite, Bicubic, Lanczos
-from vsscale import fdescale_args
+from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite
 from vsmasktools import EdgeDetectT, KirschTCanny
 from typing import Self
 
 from .scale import Doubler
-from .rescale_ext import RescBuildFB, RescBuildNonFB, descale_rescale
+from .rescale_ext import RescBuildFB, RescBuildNonFB
 
 __all__ = ["RescaleBuilder"]
 
