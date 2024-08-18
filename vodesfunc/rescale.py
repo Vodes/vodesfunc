@@ -95,7 +95,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB):
             raise CustomValueError("Float is not supported for fieldbased descales!", self.descale)
 
         if self.field_based.is_inter:
-            self._fieldbased_descale(clip, width=self.width, height=self.height, border_handling=self.border_handling)
+            self._fieldbased_descale(clip, width=self.width, height=self.height, shift=shift, border_handling=self.border_handling)
         else:
             self._non_fieldbased_descale(clip, width, height, base_height, base_width, shift, mode)
 

@@ -17,6 +17,7 @@ class RescaleBase(RescaleNumbers):
     kernel: Kernel
     post_crop: KwargsT = KwargsT()
     rescale_args: KwargsT = KwargsT()
+    descale_func_args: KwargsT = KwargsT()
     field_based: FieldBasedT | None = None
 
     descaled: vs.VideoNode
