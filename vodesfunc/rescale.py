@@ -95,6 +95,9 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB):
         else:
             self._non_fieldbased_descale(clip, width, height, base_height, base_width, shift, mode)
 
+        self.descaled = self.descaled.std.CopyFrameProps(clip)
+        self.rescaled = self.rescaled.std.CopyFrameProps(clip)
+
         return self
 
     def post_descale(self, func: GenericVSFunction) -> Self:

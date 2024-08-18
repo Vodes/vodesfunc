@@ -4,7 +4,7 @@ from typing import Callable, Sequence, Union
 
 from vskernels import Catrom, Kernel, KernelT, ScalerT
 from vsmasktools import EdgeDetectT, KirschTCanny
-from vstools import FieldBasedT, core, depth, get_y, GenericVSFunction, vs, CustomValueError
+from vstools import FieldBasedT, core, depth, get_y, GenericVSFunction, vs, CustomValueError, join
 
 from .scale import Doubler, NNEDI_Doubler
 from .rescale import RescaleBuilder
@@ -55,6 +55,7 @@ class DescaleTarget(TargetVals):
     :param base_width:      Needed for fractional descales. (will be calculated if None)
     :param shift:           Shifts to apply during the descaling and reupscaling.
     :param do_post_double:  A function that's called on the doubled clip. Can be used to do sensitive processing on a bigger clip. (e. g. Dehaloing)
+    :param do_post_descale: Same thing as do_post_double but instead on the descaled clip.
     :param credit_mask:     Can be used to pass a mask that'll be used or False to disable error masking.
     :param credit_mask_thr: The error threshold of the automatically generated credit mask.
     :param credit_mask_bh:  Generates an error mask based on a descale using the base_height. For some reason had better results with this on some shows.
@@ -85,6 +86,7 @@ class DescaleTarget(TargetVals):
     base_width: int | None = None
     shift: tuple[float, float] = (0, 0)
     do_post_double: Callable[[vs.VideoNode], vs.VideoNode] | None = None
+    do_post_descale: Callable[[vs.VideoNode], vs.VideoNode] | None = None
     credit_mask: vs.VideoNode | bool | None = None
     credit_mask_thr: float = 0.04
     credit_mask_bh: bool = False
@@ -109,13 +111,18 @@ class DescaleTarget(TargetVals):
 
         self.builder = RescaleBuilder(self.input_clip)
         self.builder.descale(self.kernel, self.width, self.height, self.base_height, self.base_width, self.shift, self.field_based)
+        if self.do_post_descale:
+            self.builder.post_descale(self.do_post_descale)
         self.descale = self.builder.descaled
         self.rescale = self.builder.rescaled
 
         if self.line_mask is not False and not isinstance(self.line_mask, Sequence) and not isinstance(self.line_mask, Callable):
-            self.builder.linemask(
-                KirschTCanny, inflate_iter=1 if self.do_post_double else 0, lthr=80 / 255, hthr=150 / 255, kernel_window=self._kernel_window
-            )
+            if isinstance(self.line_mask, vs.VideoNode):
+                self.builder.linemask(self.line_mask)
+            else:
+                self.builder.linemask(
+                    KirschTCanny, inflate_iter=1 if self.do_post_double else 0, lthr=80 / 255, hthr=150 / 255, kernel_window=self._kernel_window
+                )
             self.line_mask = self.builder.linemask_clip
 
         if self.credit_mask is not False or self.credit_mask_thr <= 0:
@@ -163,14 +170,19 @@ class DescaleTarget(TargetVals):
             elif isinstance(self.line_mask, Callable):
                 self.builder.linemask(self.line_mask(self.doubled))
 
+            self.line_mask = self.builder.linemask_clip
+
         self.builder.downscale(self.downscaler)
-        return self.builder.final()[1]
+        final = self.builder.final()[1]
+        if chroma:
+            final = join(get_y(final), chroma, vs.YUV)
+        return final
 
     def _return_creditmask(self) -> vs.VideoNode:
-        return core.std.BlankClip(self.input_clip) if self.credit_mask is not False else self.credit_mask
+        return self.credit_mask if isinstance(self.credit_mask, vs.VideoNode) else core.std.BlankClip(self.input_clip)
 
     def _return_linemask(self) -> vs.VideoNode:
-        return core.std.BlankClip(self.input_clip) if self.line_mask is not False else self.line_mask
+        return self.line_mask if isinstance(self.line_mask, vs.VideoNode) else core.std.BlankClip(self.input_clip)
 
     def _return_doubled(self) -> vs.VideoNode:
         return core.std.BlankClip(self.input_clip, width=self.input_clip * 2) if not self.doubled else self.doubled
