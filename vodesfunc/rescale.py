@@ -20,11 +20,12 @@ from typing import Self
 
 from .scale import Doubler
 from .rescale_ext import RescBuildFB, RescBuildNonFB
+from .rescale_ext.mixed_rescale import RescBuildMixed 
 
 __all__ = ["RescaleBuilder"]
 
 
-class RescaleBuilder(RescBuildFB, RescBuildNonFB):
+class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
     """
     Proof of concept Builder approach to rescaling.\n
     Mostly ready for single rescale use. Not entirely sure how to handle multiple properly yet.

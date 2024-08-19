@@ -1,5 +1,7 @@
 from vstools import FunctionUtil, KwargsT, vs, FieldBasedT, core, expect_bits, depth
 from vskernels import Kernel, Bilinear, Bicubic, Lanczos
+from typing import Self
+from abc import abstractmethod
 
 __all__ = ["RescaleBase", "RescaleNumbers", "descale_rescale"]
 
@@ -26,6 +28,15 @@ class RescaleBase(RescaleNumbers):
     doubled: vs.VideoNode | None = None
     linemask_clip: vs.VideoNode | None = None
     errormask_clip: vs.VideoNode | None = None
+
+    @abstractmethod
+    def final(self) -> tuple[Self, vs.VideoNode]: ...
+
+    def _return_creditmask(self) -> vs.VideoNode:
+        return self.errormask_clip if isinstance(self.errormask_clip, vs.VideoNode) else core.std.BlankClip(self.funcutil.work_clip)
+
+    def _return_linemask(self) -> vs.VideoNode:
+        return self.linemask_clip if isinstance(self.linemask_clip, vs.VideoNode) else core.std.BlankClip(self.funcutil.work_clip)
 
 
 def descale_rescale(builder: RescaleBase, clip: vs.VideoNode, **kwargs: KwargsT) -> vs.VideoNode:

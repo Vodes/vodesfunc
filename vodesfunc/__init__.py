@@ -14,3 +14,5 @@ from .descale import *
 from .denoise import *
 from .util import *
 from .spikefinder import *
+
+from .rescale_ext.mixed_rescale import *
