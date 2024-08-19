@@ -49,6 +49,29 @@ class MixedRB:
     Implementation of MixedRescale for RescaleBuilder(s)
 
     This is just a stop-gap solution until we (mostly Setsu) can cook up something better.
+
+    Example Usage:
+
+    ```py
+    upscaler = Waifu2x("trt", 1, fp16=True)
+
+    builders = [
+        RescaleBuilder(src).descale(Bilinear(border_handling=1), 1280, 720),
+        RescaleBuilder(src).descale(BicubicSharp, 1280, 720),
+    ]
+
+    # This will be run on all of the above
+    builders = [
+        b.double(upscaler)
+        .linemask(KirschTCanny, Bilinear, lthr=50 / 255, hthr=150 / 255, inflate_iter=2)
+        .errormask(expand=2)
+        .downscale(Hermite(linear=True))
+        for b in builders
+    ]
+
+    mixed = MixedRB(*builders)
+    rescaled = mixed.get_upscaled()
+    ```
     """
 
     def __init__(self, *targets: RescBuildMixed, diffmode: DiffMode = DiffMode.GET_NATIVE, crop_diff: bool = True) -> None:

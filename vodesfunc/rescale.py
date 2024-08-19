@@ -20,18 +20,15 @@ from typing import Self
 
 from .scale import Doubler
 from .rescale_ext import RescBuildFB, RescBuildNonFB
-from .rescale_ext.mixed_rescale import RescBuildMixed 
+from .rescale_ext.mixed_rescale import RescBuildMixed
 
 __all__ = ["RescaleBuilder"]
 
 
 class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
     """
-    Proof of concept Builder approach to rescaling.\n
-    Mostly ready for single rescale use. Not entirely sure how to handle multiple properly yet.
-
-    Doesn't handle FieldBased yet.\n
-    (Do I even have to do anything? Pretty sure vskernels does most of the work nowadays)
+    The fancy new rescale wrapper to make life easier.
+    Now 99% less buggy and should handle everything.
 
     Example usage:
     ```py
