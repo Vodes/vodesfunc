@@ -11,6 +11,7 @@ class RescBuildFB(RescaleBase):
         if shift != (0, 0):
             descale_args.update({"shift": shift})
         self.descaled = self.kernel.descale(clip, **descale_args)
+        self.descale_func_args = KwargsT()
         self.descale_func_args.update(descale_args)
 
         if not self.border_handling:
