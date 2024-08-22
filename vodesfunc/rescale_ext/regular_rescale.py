@@ -1,4 +1,4 @@
-from vstools import vs
+from vstools import vs, KwargsT
 from vsscale import fdescale_args
 
 from .base import RescaleBase, descale_rescale
@@ -22,6 +22,7 @@ class RescBuildNonFB(RescaleBase):
         _, self.rescale_args = fdescale_args(clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode, up_rate=1)
         args.update({"border_handling": self.border_handling})
 
+        self.descale_func_args = KwargsT()
         self.descale_func_args.update(args)
 
         self.height = args.get("src_height", clip.height)

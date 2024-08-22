@@ -140,7 +140,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         if self.doubled:
             scaler = Bilinear.ensure_obj(downscaler)
             self.linemask_clip = edgemaskFunc.edgemask(self.doubled, **kwargs)
-            self.linemask_clip = scaler.scale(self.linemask_clip, self.funcutil.work_clip.width, self.funcutil.work_clip.height)
+            self.linemask_clip = scaler.scale(self.linemask_clip, self.funcutil.work_clip.width, self.funcutil.work_clip.height, **self.post_crop)
         else:
             self.linemask_clip = edgemaskFunc.edgemask(self.funcutil.work_clip, **kwargs)
 
