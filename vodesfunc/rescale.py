@@ -1,11 +1,8 @@
 from vstools import (
     vs,
     core,
-    depth,
-    get_depth,
     FunctionUtil,
     GenericVSFunction,
-    ColorRange,
     iterate,
     replace_ranges,
     FrameRangesN,
@@ -16,6 +13,7 @@ from vstools import (
 )
 from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite
 from vsmasktools import EdgeDetectT, KirschTCanny
+from vsrgtools import removegrain
 from typing import Self
 
 from .scale import Doubler
@@ -46,7 +44,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
     """
 
     def __init__(self, clip: vs.VideoNode):
-        self.funcutil = FunctionUtil(clip, self.__class__.__name__, planes=0, color_family=(vs.YUV, vs.GRAY), bitdepth=(16, 32))
+        self.funcutil = FunctionUtil(clip, self.__class__.__name__, planes=0, color_family=(vs.YUV, vs.GRAY), bitdepth=32)
 
     def descale(
         self,
@@ -152,6 +150,8 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
             borders = get_border_crop(self.funcutil.work_clip, self, kernel_window)
             self.linemask_clip = self.linemask_clip.std.Crop(*borders).std.AddBorders(*borders, [get_peak_value(self.linemask_clip)])
 
+        self.linemask_clip = self.linemask_clip.std.Limiter()
+
         return self
 
     def _errormask(
@@ -160,11 +160,9 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         if isinstance(mask, vs.VideoNode):
             return mask
 
-        err_mask = core.std.Expr([depth(self.funcutil.work_clip, 32), depth(self.rescaled, 32)], f"x y - abs {mask} < 0 1 ?")
-        err_mask = depth(err_mask, 16, range_out=ColorRange.FULL, range_in=ColorRange.FULL)
-        err_mask = err_mask.rgvs.RemoveGrain(mode=6)
+        err_mask = core.std.Expr([self.funcutil.work_clip, self.rescaled], f"x y - abs {mask} < 0 1 ?")
+        err_mask = removegrain(err_mask, 6)
         err_mask = self._process_mask(err_mask, maximum_iter, inflate_iter, expand)
-        err_mask = depth(err_mask, get_depth(self.funcutil.work_clip))
 
         return err_mask
 
@@ -180,7 +178,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         :param expand:          Apply an ellipse morpho expand with the passed amount.
                                 Can be a tuple of (horizontal, vertical) or a single value for both.
         """
-        self.errormask_clip = self._errormask(mask, maximum_iter, inflate_iter, expand)
+        self.errormask_clip = self._errormask(mask, maximum_iter, inflate_iter, expand).std.Limiter()
         return self
 
     def errormask_zoned(
@@ -245,12 +243,12 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
     def _apply_masks(self):
         wclip = self.funcutil.work_clip
         if isinstance(self.errormask_clip, vs.VideoNode) and isinstance(self.linemask_clip, vs.VideoNode):
-            self.final_mask = core.std.Expr([self.linemask_clip.std.Limiter(), self.errormask_clip], "x y -")
-            self.upscaled = wclip.std.MaskedMerge(self.upscaled, self.final_mask.std.Limiter())
+            self.final_mask = core.std.Expr([self.linemask_clip, self.errormask_clip], "x y - 0 max 1 min")
+            self.upscaled = wclip.std.MaskedMerge(self.upscaled, self.final_mask)
         elif isinstance(self.errormask_clip, vs.VideoNode):
-            self.upscaled = self.upscaled.std.MaskedMerge(wclip, self.errormask_clip.std.Limiter())
+            self.upscaled = self.upscaled.std.MaskedMerge(wclip, self.errormask_clip)
         elif isinstance(self.linemask_clip, vs.VideoNode):
-            self.upscaled = wclip.std.MaskedMerge(self.upscaled, self.linemask_clip.std.Limiter())
+            self.upscaled = wclip.std.MaskedMerge(self.upscaled, self.linemask_clip)
 
     def final(self) -> tuple[Self, vs.VideoNode]:
         """
