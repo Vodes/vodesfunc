@@ -13,6 +13,7 @@ class RescBuildFB(RescaleBase):
         self.descaled = self.kernel.descale(clip, **descale_args)
         self.descale_func_args = KwargsT()
         self.descale_func_args.update(descale_args)
+        self.post_crop = KwargsT()
 
         if not self.border_handling:
             self.rescaled = self.kernel.scale(self.descaled, width=clip.width, height=clip.height)
@@ -25,7 +26,7 @@ class RescBuildFB(RescaleBase):
 
             match int(self.border_handling):
                 case 1:
-                    wclip = padder.COLOR(wclip, left, right, top, bottom, color=False)
+                    wclip = padder.COLOR(wclip, left, right, top, bottom, color=0)
                 case 2:
                     wclip = padder.REPEAT(wclip, left, right, top, bottom)
                 case _:
