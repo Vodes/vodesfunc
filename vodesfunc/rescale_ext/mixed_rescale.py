@@ -39,9 +39,9 @@ class RescBuildMixed(RescaleBase):
         return diff.std.PlaneStats()
 
     def _add_index_to_clips(self):
-        self.descaled = self.descaled.std.SetFrameProp("Target", self.index)
-        self.rescaled = self.rescaled.std.SetFrameProp("Target", self.index)
-        self.upscaled = self.upscaled.std.SetFrameProp("Target", self.index)
+        self.descaled = self.descaled.std.SetFrameProp("RB_Target", self.index)
+        self.rescaled = self.rescaled.std.SetFrameProp("RB_Target", self.index)
+        self.upscaled = self.upscaled.std.SetFrameProp("RB_Target", self.index)
 
 
 class MixedRB:
