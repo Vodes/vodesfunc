@@ -3,7 +3,7 @@ from typing import Sequence, Union
 from vsaa import Antialiaser, Eedi3
 from vskernels import Bicubic, Kernel, KernelT, Lanczos, Scaler, ScalerT
 from vsrgtools import unsharp_masked
-from vstools import FrameRangesN, KwargsT, mod2, vs, core, get_w, join, plane, scale_8bit
+from vstools import FrameRangesN, KwargsT, mod2, vs, core, get_w, join, plane, scale_value
 
 from .scale import mod_padding
 
@@ -99,7 +99,7 @@ def cope_aa(
     width = get_w(height, mod=None)
     if mask:
         mask = mask.resize.Bilinear(width, height) if len(scalers) < 3 else scalers[2].scale(mask, width, height)
-        mask = mask.std.Binarize(scale_8bit(mask, 16))
+        mask = mask.std.Binarize(scale_value(mask, 16))
     wclip = scalers[0].scale(clip, width, height)
     aa = wclip.std.Transpose()
     aa = antialiaser.interpolate(aa, False, sclip=aa, mclip=mask.std.Transpose() if mask else None, **kwargs).std.Transpose()
