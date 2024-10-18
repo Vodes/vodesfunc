@@ -85,8 +85,6 @@ def adaptive_grain(
     def scale_val8x(value: int, chroma: bool = False) -> float:
         return scale_value(value, 8, ogdepth, scale_offsets=not tv_range, chroma=chroma)
 
-    neutral = [get_neutral_value(clip), get_neutral_value(clip, True)]
-
     if not static and temporal_average > 0:
         length = clip.num_frames + temporal_radius - 1
     else:
@@ -99,6 +97,7 @@ def adaptive_grain(
         width = mod4(width)
         height = mod4(height)
 
+    neutral = get_neutral_value(clip)
     blank = clip.std.BlankClip(width, height, length=length, color=normalize_seq(neutral, clip.format.num_planes))
     grained = blank.noise.Add(strength[0], strength[1], type=type, xsize=size[0], ysize=size[1], seed=seed, constant=static, **kwargs)
 
@@ -129,19 +128,19 @@ def adaptive_grain(
         else:
             limit_expr = [limit_expr, "x y abs + {2} > x abs y - {1} < or x x y + ?"]
 
-        grained = core.std.Expr([clip, grained], [limit_expr[_].format(neutral[_], lo[_], hi[_]) for _ in range(0, clip.format.num_planes - 1)])
+        grained = core.std.Expr([clip, grained], [limit_expr[_].format(neutral, lo[_], hi[_]) for _ in range(0, clip.format.num_planes - 1)])
 
         if protect_neutral and strength[1] > 0 and clip.format.color_family == vs.YUV:
             format444 = core.query_video_format(vs.YUV, clip.format.sample_type, ogdepth, 0, 0)
             neutral_mask = clip.resize.Bicubic(format=format444)
             # disable grain if neutral chroma
-            neutral_mask = core.std.Expr(split(neutral_mask), f"y {neutral[1]} = z {neutral[1]} = and {get_peak_value(clip)} 0 ?")
+            neutral_mask = core.std.Expr(split(neutral_mask), f"y {neutral} = z {neutral} = and {get_peak_value(clip)} 0 ?")
             grained = core.std.MaskedMerge(grained, clip, neutral_mask, planes=[1, 2])
     else:
         if clip.format.sample_type == vs.INTEGER:
             grained = core.std.MergeDiff(clip, grained)
         else:
-            grained = core.std.Expr([clip, grained], [f"y {neutral[_]} - x +" for _ in range(clip.format.num_planes - 1)])
+            grained = core.std.Expr([clip, grained], [f"y {neutral} - x +" for _ in range(clip.format.num_planes - 1)])
 
     return clip.std.MaskedMerge(grained, mask)
 
