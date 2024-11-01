@@ -1,7 +1,7 @@
 
 [project]
 name = "vodesfunc"
-version = "1.6.1"
+version = "1.7.0"
 description = "Vodes' random Vapoursynth Functions."
 authors = [{ name = "Vodes", email = "vodes.imp@gmail.com" }]
 dependencies = [
@@ -11,7 +11,7 @@ dependencies = [
     "vskernels>=3.0.1",
     "vstools>=3.0.0",
     "vsmasktools>=1.2.0",
-    "vsmuxtools>=0.1.0"
+    "vsmuxtools>=0.2.0"
 ]
 classifiers = [
     "Natural Language :: English",
@@ -38,7 +38,7 @@ build-backend = "setuptools.build_meta"
 [tool.ruff]
 line-length = 150
 indent-width = 4
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 ignore = ["E722"]
