@@ -280,4 +280,8 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
 
             mask = Morpho.expand(mask, expand[0], expand[1], XxpandMode.ELLIPSE)
 
+        if self.kernel.kwargs.get("border_handling"):
+            mask = mask.std.Crop((self.kernel.kernel_radius,) * 4)
+            mask = mask.std.AddBorders((self.kernel.kernel_radius,) * 4, color=get_peak_value(mask))
+
         return mask
