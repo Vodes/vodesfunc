@@ -33,7 +33,12 @@ class RescBuildMixed(RescaleBase):
             case _:
                 metric = "x y - abs dup 0.015 > swap 0 ?"
 
-        diff = core.std.Expr([depth(self.rescaled, 32), clip], metric)
+        rescaled = depth(self.rescaled, 32)
+
+        if self.errormask_clip is not None:
+            rescaled = rescaled.std.MaskedMerge(clip, self.errormask_clip)
+
+        diff = core.std.Expr([rescaled, clip], metric)
         if self.crop_diff:
             diff = diff.std.Crop(5, 5, 5, 5)
         return diff.std.PlaneStats()
