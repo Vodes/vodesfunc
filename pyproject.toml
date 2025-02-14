@@ -11,7 +11,8 @@ dependencies = [
     "vskernels>=3.0.1",
     "vstools>=3.0.0",
     "vsmasktools>=1.2.0",
-    "vsmuxtools>=0.2.0"
+    "vsmuxtools>=0.2.0",
+    "jetpytools>=1.2.3"
 ]
 classifiers = [
     "Natural Language :: English",
