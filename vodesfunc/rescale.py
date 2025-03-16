@@ -238,6 +238,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         wclip = self.funcutil.work_clip
         self.upscaled = scaler.scale(self.doubled, wclip.width, wclip.height, **self.post_crop)
         self._apply_masks()
+        self.upscaled = self.upscaled.std.CopyFrameProps(wclip)
         return self
 
     def _apply_masks(self):
