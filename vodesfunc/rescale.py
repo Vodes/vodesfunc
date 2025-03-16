@@ -129,6 +129,8 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         :param kernel_window:   To override kernel radius used in case of border_handling being used.
         :param **kwargs:        Any other params to pass to the edgemask creation. For example `lthr` or `hthr`.
         """
+        if self.upscaled:
+            raise SyntaxError("RescaleBuilder: Downscaled clip already created. Create linemasks before calling downscale.")
         if isinstance(mask, vs.VideoNode):
             self.linemask_clip = mask
             return self
@@ -157,6 +159,8 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
     def _errormask(
         self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3, expand: int | tuple[int, int | None] = 0
     ) -> vs.VideoNode:
+        if self.upscaled:
+            raise SyntaxError("RescaleBuilder: Downscaled clip already created. Create errormasks before calling downscale.")
         if isinstance(mask, vs.VideoNode):
             return mask
 
