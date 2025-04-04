@@ -10,6 +10,7 @@ from vstools import (
     FieldBasedT,
     FieldBased,
     CustomValueError,
+    get_video_format
 )
 from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite
 from vsmasktools import EdgeDetectT, KirschTCanny
@@ -200,6 +201,9 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         if not ranges:
             return self
         err_mask = self._errormask(mask, maximum_iter, inflate_iter, expand)
+        if not self.errormask_clip:
+            self.errormask_clip = core.std.BlankClip(self.funcutil.work_clip, format=get_video_format(err_mask))
+        
         self.errormask_clip = replace_ranges(self.errormask_clip, err_mask, ranges)
         return self
 

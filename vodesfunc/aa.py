@@ -99,7 +99,7 @@ def cope_aa(
     width = get_w(height, mod=None)
     if mask:
         mask = mask.resize.Bilinear(width, height) if len(scalers) < 3 else scalers[2].scale(mask, width, height)
-        mask = mask.std.Binarize(scale_value(mask, 16))
+        mask = mask.std.Binarize(scale_value(16, 8, mask))
     wclip = scalers[0].scale(clip, width, height)
     aa = wclip.std.Transpose()
     aa = antialiaser.interpolate(aa, False, sclip=aa, mclip=mask.std.Transpose() if mask else None, **kwargs).std.Transpose()
