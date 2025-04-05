@@ -1,4 +1,4 @@
-from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT
+from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT, get_var_infos
 from vsrgtools import contrasharpening
 
 __all__ = ["VMDegrain", "schizo_denoise"]
@@ -9,39 +9,84 @@ def VMDegrain(
     thSAD: int = 60,
     prefilter: vs.VideoNode | int = 2,
     smooth: bool = True,
-    block_size: int = 32,
-    overlap: int = 16,
+    block_size: int | None = None,
+    overlap: int | None = None,
+    refine: int | None = None,
     **kwargs: KwargsT,
 ) -> vs.VideoNode:
     """
-    Just some convenience function for mvtools with a useable preset and temporal smoothing.
-    Check the MVTools Docs for the params that aren't listed below.
+    Just some convenience function for mvtools with a useable preset and temporal smoothing.\n
+    Check the MVTools Docs for the params that aren't listed below.\n
+    `block_size`, `overlap` and `refine` are using somewhat optimized defaults depending on the resolution if `None`.
 
 
     :param src:             Input to denoise
     :param smooth:          Run TTempsmooth on the denoised clip if True
     :return:                Denoised clip
     """
-    from vsdenoise import MVTools, SADMode, SearchMode, MotionMode, PelType, Prefilter
+    from vsdenoise import MVTools, SADMode, SearchMode, MotionMode, Prefilter
 
     if isinstance(prefilter, int):
         prefilter = Prefilter(prefilter)
     y = depth(get_y(src), 16)
-    d_args = KwargsT(
-        prefilter=prefilter,
-        thSAD=thSAD,
-        block_size=block_size,
-        overlap=overlap,
-        sad_mode=SADMode.SPATIAL.same_recalc,
-        search=SearchMode.DIAMOND,
-        motion=MotionMode.HIGH_SAD,
-        pel_type=PelType.BICUBIC,
-        rfilter=2,
-        sharp=2,
-    )
-    d_args.update(**kwargs)
 
-    out = MVTools.denoise(y, **d_args)
+    if any([block_size, overlap, refine]) and not all([block_size, overlap, refine]):
+        raise ValueError("VMDegrain: If you want to play around with blocksize, overlap or refine, you have to set all of them.")
+
+    if not block_size or not overlap or not refine:
+        refine = 3
+        _, width, height = get_var_infos(src)
+        if width <= 1024 and height <= 576:
+            block_size = 32
+            overlap = 16
+        elif width <= 2048 and height <= 1536:
+            block_size = 64
+            overlap = 32
+        else:
+            block_size = 128
+            overlap = 64
+
+    try:
+        from vsdenoise import (
+            mc_degrain,
+            RFilterMode,
+            MVToolsPreset,
+            prefilter_to_full_range,
+            SuperArgs,
+            AnalyzeArgs,
+            RecalculateArgs,
+            SharpMode,
+        )
+
+        analyze_recalc_args = dict(search=SearchMode.DIAMOND, dct=SADMode.ADAPTIVE_SPATIAL_MIXED, truemotion=MotionMode.SAD)
+        preset = MVToolsPreset(
+            search_clip=prefilter_to_full_range,
+            pel=2,
+            super_args=SuperArgs(sharp=SharpMode.WIENER, rfilter=RFilterMode.TRIANGLE),
+            analyze_args=AnalyzeArgs(blksize=block_size, overlap=overlap, **analyze_recalc_args),
+            recalculate_args=RecalculateArgs(blksize=int(block_size / 2), overlap=int(overlap / 2), **analyze_recalc_args),
+        )
+
+        out = mc_degrain(y, prefilter=prefilter, thsad=thSAD, blksize=block_size, refine=refine, rfilter=RFilterMode.TRIANGLE, preset=preset)
+    except:  # noqa: E722
+        from vsdenoise import PelType
+
+        d_args = KwargsT(
+            prefilter=prefilter,
+            thSAD=thSAD,
+            block_size=block_size,
+            overlap=overlap,
+            sad_mode=SADMode.SPATIAL.same_recalc,
+            search=SearchMode.DIAMOND,
+            motion=MotionMode.HIGH_SAD,
+            pel_type=PelType.BICUBIC,
+            refine=refine,
+            rfilter=2,
+            sharp=2,
+        )
+        d_args.update(**kwargs)
+        out = MVTools.denoise(y, **d_args)
+
     if smooth:
         out = out.ttmpsm.TTempSmooth(maxr=1, thresh=1, mdiff=0, strength=1)
 
@@ -136,6 +181,6 @@ def schizo_denoise(
 
     out = join(depth(bm3d, 16), nlm)  # type: ignore
     out = depth(out, get_depth(src))
-    if csharp != False:
-        out = contrasharpening(out, src, mode=3 if csharp == True else csharp)
+    if csharp != False:  # noqa: E712
+        out = contrasharpening(out, src, mode=3 if csharp == True else csharp)  # noqa: E712
     return out.std.CopyFrameProps(src)
