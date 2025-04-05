@@ -1,5 +1,5 @@
 from vstools import vs, KwargsT
-from vsscale import fdescale_args
+from vsscale import ScalingArgs
 
 from .base import RescaleBase, descale_rescale
 
@@ -17,13 +17,15 @@ class RescBuildNonFB(RescaleBase):
         shift: tuple[float, float] = (0, 0),
         mode: str = "hw",
     ) -> None:
-        sanitized_shift = (shift[0] if shift[0] else None, shift[1] if shift[1] else None)
-        args, self.post_crop = fdescale_args(clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode)
-        _, self.rescale_args = fdescale_args(clip, height, base_height, base_width, sanitized_shift[0], sanitized_shift[1], width, mode, up_rate=1)
-        args.update({"border_handling": self.border_handling})
+        sc_args = ScalingArgs.from_args(
+            clip, height=height, width=width, base_height=base_height, base_width=base_width, src_top=shift[0], src_left=shift[1], mode=mode
+        )
 
-        self.descale_func_args = KwargsT()
-        self.descale_func_args.update(args)
+        args = KwargsT(width=sc_args.width, height=sc_args.height, border_handling=self.border_handling) | sc_args.kwargs()
+        self.post_crop = sc_args.kwargs(2)
+        self.rescale_args = sc_args.kwargs()
+
+        self.descale_func_args = KwargsT() | args
 
         self.height = args.get("src_height", clip.height)
         self.width = args.get("src_width", clip.width)
