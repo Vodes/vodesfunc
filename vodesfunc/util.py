@@ -1,30 +1,12 @@
 from vstools import vs, core, KwargsT
 
 from functools import partial
-from vsmuxtools import PathLike, ensure_path_exists, src as vmt_src
 
 
 __all__: list[str] = [
     "set_output",
     "out",
-    "src",
-    "source",
 ]
-
-
-def src(filePath: PathLike, force_lsmas: bool = False, delete_dgi_log: bool = True, **kwargs) -> vs.VideoNode:
-    """
-    Used dgindex as Source and requires dgindexnv in path to generate files if they don't exist.\n
-    Now deprecated in favour of the vsmuxtools implementation.
-
-    :param filepath:        Path to video or dgi file
-    :param force_lsmas:     Skip dgsource entirely and use lsmas
-    :param delete_dgi_log:  Delete the .log files dgindexnv creates
-    :return:                Video Node
-    """
-    print("vodesfunc.src is deprecated and currently only calls vsmuxtools.src!")
-    print("It might get removed in the next update or two.")
-    return vmt_src(ensure_path_exists(filePath, src), force_lsmas, **kwargs)
 
 
 def set_output(
@@ -71,4 +53,3 @@ def _print_frameinfo(clip: vs.VideoNode, title: str = "") -> vs.VideoNode:
 
 
 out = set_output
-source = src
