@@ -34,7 +34,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
     ```py
     builder, rescaled = (
         RescaleBuilder(clip)
-        .descale(Bilinear, 843.75, base_height=846)
+        .descale(Bilinear, 1500, 843.75, base_height=846)
         .double()
         .errormask(0.0975)
         .linemask()
@@ -64,7 +64,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
 
         :param kernel:              Kernel to descale with
         :param height:              Height to descale to
-        :param width:               Width to descale to
+        :param width:               Width to descale to. Please be absolutely certain of what you're doing if you're using get_w for this.
         :param base_height:         Padded height used in a "fractional" descale
         :param base_width:          Padded width used in a "fractional" descale
                                     Both of these are technically optional but highly recommended to have set for float width/height.
