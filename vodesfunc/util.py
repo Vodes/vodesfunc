@@ -54,7 +54,7 @@ def set_output(
 
 
 def _print_frameinfo(clip: vs.VideoNode, title: str = "") -> vs.VideoNode:
-    style = "sans-serif,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000," "0,0,0,0,100,100,0,0,1,2,0,7,10,10,10,1"
+    style = "sans-serif,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,7,10,10,10,1"
 
     def FrameProps(n: int, f: vs.VideoFrame, clip: vs.VideoNode) -> vs.VideoNode:
         if "_PictType" in f.props:
