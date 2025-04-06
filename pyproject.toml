@@ -1,13 +1,13 @@
 
 [project]
 name = "vodesfunc"
-version = "1.8.0"
+version = "1.8.1"
 description = "Vodes' random Vapoursynth Functions."
 authors = [{ name = "Vodes", email = "vodes.imp@gmail.com" }]
 dependencies = [
     "Vapoursynth>=66",
     "vsmuxtools>=0.2.1",
-    "vsjetpack>=0.3.1,<0.4.0",
+    "vsjetpack>=0.3.2,<0.4.0",
     "jetpytools>=1.2.3"
 ]
 classifiers = [
