@@ -10,12 +10,13 @@ from vstools import (
     FieldBasedT,
     FieldBased,
     CustomValueError,
-    get_video_format
+    get_video_format,
 )
 from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite
 from vsmasktools import EdgeDetectT, KirschTCanny
 from vsrgtools import removegrain
 from typing import Self
+import inspect
 
 from .scale import Doubler
 from .rescale_ext import RescBuildFB, RescBuildNonFB
@@ -75,6 +76,12 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
                                     Will try to take the prop from the clip if `None` was passed.
         """
         clip = self.funcutil.work_clip
+
+        if isinstance(height, float) and len(stack := inspect.stack()) > 1:
+            has_getw = [ctx for ctx in stack[1].code_context if "get_w" in ctx.lower()]
+            if has_getw:
+                print("RescaleBuilder: Please make sure get_w returns the width you really want!")
+
         self.kernel = Kernel.ensure_obj(kernel)
         self.border_handling = self.kernel.kwargs.pop("border_handling", 0)
         self.field_based = FieldBased.from_param(field_based) or FieldBased.from_video(clip)
@@ -203,7 +210,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         err_mask = self._errormask(mask, maximum_iter, inflate_iter, expand)
         if not self.errormask_clip:
             self.errormask_clip = core.std.BlankClip(self.funcutil.work_clip, format=get_video_format(err_mask))
-        
+
         self.errormask_clip = replace_ranges(self.errormask_clip, err_mask, ranges)
         return self
 
