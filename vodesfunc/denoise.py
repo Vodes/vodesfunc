@@ -1,19 +1,5 @@
 from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT, get_var_infos
 from vsrgtools import contrasharpening
-from vsdenoise import (
-    mc_degrain,
-    RFilterMode,
-    MVToolsPreset,
-    prefilter_to_full_range,
-    SuperArgs,
-    AnalyzeArgs,
-    RecalculateArgs,
-    SharpMode,
-    SADMode,
-    SearchMode,
-    MotionMode,
-    Prefilter,
-)
 
 __all__ = ["VMDegrain", "schizo_denoise"]
 
@@ -38,6 +24,7 @@ def VMDegrain(
     :param smooth:          Run TTempsmooth on the denoised clip if True
     :return:                Denoised clip
     """
+    from vsdenoise import MVTools, SADMode, SearchMode, MotionMode, Prefilter
 
     if isinstance(prefilter, int):
         prefilter = Prefilter(prefilter)
@@ -59,16 +46,46 @@ def VMDegrain(
             block_size = 128
             overlap = 64
 
-    analyze_recalc_args = dict(search=SearchMode.DIAMOND, dct=SADMode.ADAPTIVE_SPATIAL_MIXED, truemotion=MotionMode.SAD)
-    preset = MVToolsPreset(
-        search_clip=prefilter_to_full_range,
-        pel=2,
-        super_args=SuperArgs(sharp=SharpMode.WIENER, rfilter=RFilterMode.TRIANGLE),
-        analyze_args=AnalyzeArgs(blksize=block_size, overlap=overlap, **analyze_recalc_args),
-        recalculate_args=RecalculateArgs(blksize=int(block_size / 2), overlap=int(overlap / 2), **analyze_recalc_args),
-    )
+    try:
+        from vsdenoise import (
+            mc_degrain,
+            RFilterMode,
+            MVToolsPreset,
+            prefilter_to_full_range,
+            SuperArgs,
+            AnalyzeArgs,
+            RecalculateArgs,
+            SharpMode,
+        )
 
-    out = mc_degrain(y, prefilter=prefilter, thsad=thSAD, blksize=block_size, refine=refine, rfilter=RFilterMode.TRIANGLE, preset=preset)
+        analyze_recalc_args = dict(search=SearchMode.DIAMOND, dct=SADMode.ADAPTIVE_SPATIAL_MIXED, truemotion=MotionMode.SAD)
+        preset = MVToolsPreset(
+            search_clip=prefilter_to_full_range,
+            pel=2,
+            super_args=SuperArgs(sharp=SharpMode.WIENER, rfilter=RFilterMode.TRIANGLE),
+            analyze_args=AnalyzeArgs(blksize=block_size, overlap=overlap, **analyze_recalc_args),
+            recalculate_args=RecalculateArgs(blksize=int(block_size / 2), overlap=int(overlap / 2), **analyze_recalc_args),
+        )
+
+        out = mc_degrain(y, prefilter=prefilter, thsad=thSAD, blksize=block_size, refine=refine, rfilter=RFilterMode.TRIANGLE, preset=preset)
+    except:  # noqa: E722
+        from vsdenoise import PelType
+
+        d_args = KwargsT(
+            prefilter=prefilter,
+            thSAD=thSAD,
+            block_size=block_size,
+            overlap=overlap,
+            sad_mode=SADMode.SPATIAL.same_recalc,
+            search=SearchMode.DIAMOND,
+            motion=MotionMode.HIGH_SAD,
+            pel_type=PelType.BICUBIC,
+            refine=refine,
+            rfilter=2,
+            sharp=2,
+        )
+        d_args.update(**kwargs)
+        out = MVTools.denoise(y, **d_args)
 
     if smooth:
         out = out.ttmpsm.TTempSmooth(maxr=1, thresh=1, mdiff=0, strength=1)
