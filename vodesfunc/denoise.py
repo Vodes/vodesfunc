@@ -1,7 +1,20 @@
-from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT, get_var_infos
+from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT, get_var_infos, FunctionUtil
 from vsrgtools import contrasharpening
 
+from importlib.metadata import version as fetch_version
+from packaging.version import Version
+
 __all__ = ["VMDegrain", "schizo_denoise"]
+
+
+def check_jetpack_version():
+    jetpack_version = Version(fetch_version("vsjetpack"))
+    if jetpack_version >= Version("0.3.0"):
+        print(
+            "VMDegrain: There's probably a good reason for it but note that the new mvtools wrapper is MUCH slower and I'm not sure how to roughly match the settings."
+        )
+        if jetpack_version < Version("0.3.2"):
+            print("Please update vsjetpack to atleast 0.3.2 if you want to use 0.3.X. There are some necessary repair fixes on it.")
 
 
 def VMDegrain(
@@ -24,11 +37,13 @@ def VMDegrain(
     :param smooth:          Run TTempsmooth on the denoised clip if True
     :return:                Denoised clip
     """
+    check_jetpack_version()
     from vsdenoise import MVTools, SADMode, SearchMode, MotionMode, Prefilter
 
     if isinstance(prefilter, int):
         prefilter = Prefilter(prefilter)
-    y = depth(get_y(src), 16)
+
+    futil = FunctionUtil(src, VMDegrain, 0, vs.YUV, 16)
 
     if any([block_size, overlap, refine]) and not all([block_size, overlap, refine]):
         raise ValueError("VMDegrain: If you want to play around with blocksize, overlap or refine, you have to set all of them.")
@@ -67,7 +82,9 @@ def VMDegrain(
             recalculate_args=RecalculateArgs(blksize=int(block_size / 2), overlap=int(overlap / 2), **analyze_recalc_args),
         )
 
-        out = mc_degrain(y, prefilter=prefilter, thsad=thSAD, blksize=block_size, refine=refine, rfilter=RFilterMode.TRIANGLE, preset=preset)
+        out = mc_degrain(
+            futil.work_clip, prefilter=prefilter, thsad=thSAD, blksize=block_size, refine=refine, rfilter=RFilterMode.TRIANGLE, preset=preset
+        )
     except:  # noqa: E722
         from vsdenoise import PelType
 
@@ -85,13 +102,12 @@ def VMDegrain(
             sharp=2,
         )
         d_args.update(**kwargs)
-        out = MVTools.denoise(y, **d_args)
+        out = MVTools.denoise(futil.work_clip, **d_args)
 
     if smooth:
         out = out.ttmpsm.TTempSmooth(maxr=1, thresh=1, mdiff=0, strength=1)
 
-    out = depth(out, get_depth(src))
-    return out if src.format.color_family == vs.GRAY else join(out, src)  # type: ignore
+    return futil.return_clip(out)
 
 
 def schizo_denoise(
