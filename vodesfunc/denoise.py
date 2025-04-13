@@ -1,6 +1,7 @@
 from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT, get_var_infos, FunctionUtil
 from vsrgtools import contrasharpening
 
+from inspect import signature
 from importlib.metadata import version as fetch_version
 from packaging.version import Version
 
@@ -82,10 +83,18 @@ def VMDegrain(
             recalculate_args=RecalculateArgs(blksize=int(block_size / 2), overlap=int(overlap / 2), **analyze_recalc_args),
         )
 
-        out = mc_degrain(
-            futil.work_clip, prefilter=prefilter, thsad=thSAD, blksize=block_size, refine=refine, rfilter=RFilterMode.TRIANGLE, preset=preset
-        )
-    except:  # noqa: E722
+        # Dirty clean up for random args getting removed from on git.
+        # (You should not be using git jetpack with vodesfunc but it is what it is)
+        mc_degrain_sig = signature(mc_degrain)
+        args = KwargsT(prefilter=prefilter, thsad=thSAD, blksize=block_size, refine=refine, rfilter=RFilterMode.TRIANGLE, preset=preset)
+        clean_args = {k: v for k, v in args.items() if k in mc_degrain_sig.parameters}
+
+        if len(args) != len(clean_args):
+            args_string = ", ".join(list(k for k, _ in args.items() if k not in clean_args))
+            print(f"VMDegrain: A couple of arguments are not passed to mc_degrain anymore! ({args_string})\nPlease do report this to the maintainer.")
+
+        out = mc_degrain(futil.work_clip, **clean_args)
+    except ImportError:  # noqa: E722
         from vsdenoise import PelType
 
         d_args = KwargsT(
