@@ -94,7 +94,7 @@ def VMDegrain(
             print(f"VMDegrain: A couple of arguments are not passed to mc_degrain anymore! ({args_string})\nPlease do report this to the maintainer.")
 
         out = mc_degrain(futil.work_clip, **clean_args)
-    except ImportError:  # noqa: E722
+    except ImportError:
         from vsdenoise import PelType
 
         d_args = KwargsT(
