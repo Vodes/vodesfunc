@@ -1,21 +1,63 @@
-from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT, get_var_infos, FunctionUtil
+from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT, get_var_infos, FunctionUtil, classproperty
 from vsrgtools import contrasharpening
+from vsdenoise import MVToolsPreset, MotionMode, SearchMode, prefilter_to_full_range
 
 from inspect import signature
 from importlib.metadata import version as fetch_version
 from packaging.version import Version
 
-__all__ = ["VMDegrain", "schizo_denoise"]
+__all__ = ["VMDegrain", "schizo_denoise", "MVPresets"]
 
 
-def check_jetpack_version():
+def check_jetpack_version() -> bool:
     jetpack_version = Version(fetch_version("vsjetpack"))
     if jetpack_version >= Version("0.3.0"):
-        print(
-            "VMDegrain: There's probably a good reason for it but note that the new mvtools wrapper is MUCH slower and I'm not sure how to roughly match the settings."
-        )
         if jetpack_version < Version("0.3.2"):
             print("Please update vsjetpack to atleast 0.3.2 if you want to use 0.3.X. There are some necessary repair fixes on it.")
+        return True
+    return False
+
+
+class MVPresets:
+    @classproperty
+    def MaybeNotTerrible(self) -> MVToolsPreset:
+        """
+        This is just me throwing stuff at the wall to have some improvements without major slowdowns.
+        """
+        from vsdenoise import AnalyzeArgs, RecalculateArgs
+
+        return MVToolsPreset(
+            pel=1,
+            search_clip=prefilter_to_full_range,
+            analyze_args=AnalyzeArgs(truemotion=MotionMode.SAD, search=SearchMode.HEXAGON, pelsearch=2),
+            recalculate_args=RecalculateArgs(truemotion=MotionMode.SAD, search=SearchMode.HEXAGON, searchparam=1),
+        )
+
+    @classproperty
+    def ActualOldWrapperMatch(self) -> MVToolsPreset:
+        """
+        Preset to match the old wrapper as well as possible.
+        It is arguable if this is desirable.
+        """
+        from vsdenoise import AnalyzeArgs, RecalculateArgs
+
+        return MVToolsPreset(
+            pel=1,
+            pad=16,
+            search_clip=prefilter_to_full_range,
+            analyze_args=AnalyzeArgs(truemotion=MotionMode.SAD, search=SearchMode.DIAMOND, pelsearch=2),
+            recalculate_args=RecalculateArgs(truemotion=MotionMode.SAD, search=SearchMode.ONETIME, searchparam=0),
+        )
+
+    @classproperty
+    def Default(self) -> MVToolsPreset | None:
+        """
+        Returns `MVPresets.MaybeNotTerrible` if used on a version where mc_degrain is available.
+        Otherwise `None`.
+        """
+        if check_jetpack_version():
+            return MVPresets.MaybeNotTerrible
+        return None
 
 
 def VMDegrain(
@@ -25,7 +67,9 @@ def VMDegrain(
     smooth: bool = True,
     block_size: int | None = None,
     overlap: int | None = None,
-    refine: int | None = None,
+    refine: int = 2,
+    tr: int = 2,
+    preset: MVToolsPreset | None = MVPresets.Default,
     **kwargs: KwargsT,
 ) -> vs.VideoNode:
     """
@@ -38,7 +82,6 @@ def VMDegrain(
     :param smooth:          Run TTempsmooth on the denoised clip if True
     :return:                Denoised clip
     """
-    check_jetpack_version()
     from vsdenoise import MVTools, SADMode, SearchMode, MotionMode, Prefilter
 
     if isinstance(prefilter, int):
@@ -46,11 +89,10 @@ def VMDegrain(
 
     futil = FunctionUtil(src, VMDegrain, 0, vs.YUV, 16)
 
-    if any([block_size, overlap, refine]) and not all([block_size, overlap, refine]):
+    if any([block_size, overlap]) and not all([block_size, overlap]):
         raise ValueError("VMDegrain: If you want to play around with blocksize, overlap or refine, you have to set all of them.")
 
-    if not block_size or not overlap or not refine:
-        refine = 3
+    if not block_size or not overlap:
         _, width, height = get_var_infos(src)
         if width <= 1024 and height <= 576:
             block_size = 32
@@ -66,27 +108,24 @@ def VMDegrain(
         from vsdenoise import (
             mc_degrain,
             RFilterMode,
-            MVToolsPreset,
-            prefilter_to_full_range,
-            SuperArgs,
-            AnalyzeArgs,
-            RecalculateArgs,
-            SharpMode,
         )
 
-        analyze_recalc_args = dict(search=SearchMode.DIAMOND, dct=SADMode.ADAPTIVE_SPATIAL_MIXED, truemotion=MotionMode.SAD)
-        preset = MVToolsPreset(
-            search_clip=prefilter_to_full_range,
-            pel=2,
-            super_args=SuperArgs(sharp=SharpMode.WIENER, rfilter=RFilterMode.TRIANGLE),
-            analyze_args=AnalyzeArgs(blksize=block_size, overlap=overlap, **analyze_recalc_args),
-            recalculate_args=RecalculateArgs(blksize=int(block_size / 2), overlap=int(overlap / 2), **analyze_recalc_args),
-        )
+        if preset is None:
+            raise ValueError("VMDegrain: preset cannot be None when on vsjetpack>=0.3.0!")
 
         # Dirty clean up for random args getting removed from on git.
         # (You should not be using git jetpack with vodesfunc but it is what it is)
         mc_degrain_sig = signature(mc_degrain)
-        args = KwargsT(prefilter=prefilter, thsad=thSAD, blksize=block_size, refine=refine, rfilter=RFilterMode.TRIANGLE, preset=preset)
+        args = KwargsT(
+            prefilter=prefilter,
+            thsad=thSAD,
+            thsad_recalc=thSAD,
+            blksize=block_size,
+            refine=refine,
+            rfilter=RFilterMode.TRIANGLE,
+            preset=preset,
+            tr=tr,
+        )
         clean_args = {k: v for k, v in args.items() if k in mc_degrain_sig.parameters}
 
         if len(args) != len(clean_args):
@@ -106,9 +145,11 @@ def VMDegrain(
             search=SearchMode.DIAMOND,
             motion=MotionMode.HIGH_SAD,
             pel_type=PelType.BICUBIC,
-            refine=refine,
+            pel=1,
+            refine=refine + 1,  # Refine calcs are broken on the old wrapper, 3 is basically equivalent to 2 on the new one
             rfilter=2,
             sharp=2,
+            tr=tr,
         )
         d_args.update(**kwargs)
         out = MVTools.denoise(futil.work_clip, **d_args)
@@ -145,7 +186,8 @@ def schizo_denoise(
     :param cuda:        Uses NlmCuda and BM3DCuda respectively if available. The latter prefers RTC if available.
                         Will fallback to BM3DHip if installed and no cuda available.
     :param csharp:      Apply contrasharpening after denoising. True defaults to 3 while False obviously disables it.
-    :param kwargs:      Any parameters you might wanna pass to bm3d or mvtools.
+    :param kwargs:      Any parameters you might wanna pass to bm3d or mvtools.\n
+                        Note that this also takes `tr` or `preset` for mvtools which might be very useful.
 
     :return:            Denoised clip
     """
