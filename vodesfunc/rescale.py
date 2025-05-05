@@ -104,15 +104,23 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
 
         return self
 
-    def post_descale(self, func: GenericVSFunction) -> Self:
+    def post_descale(self, func: GenericVSFunction | list[GenericVSFunction]) -> Self:
         """
         A function to apply any arbitrary function on the descaled clip.\n
         I can't think of a good usecase/example for this but I was asked to add this before.
 
-        :param func:    This can be any function that takes a videonode input and returns a videonode.
-                        You are responsible for keeping the format the same.
+        :param func:    This can be any function or list of functions that take a videonode input
+                        and returns a videonode. You are responsible for keeping the format the same.
         """
-        self.descaled = func(self.descaled)
+        if not isinstance(func, list):
+            func = [func]
+
+        for f in func:
+            if not callable(f):
+                raise CustomValueError(f"post_descale: Function {f.__name__} is not callable!", self.post_descale)
+
+            self.descaled = f(self.descaled)
+
         return self
 
     def linemask(
@@ -229,16 +237,25 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
             self.doubled = scaler.multi(self.descaled)
         return self
 
-    def post_double(self, func: GenericVSFunction) -> Self:
+    def post_double(self, func: GenericVSFunction | list[GenericVSFunction]) -> Self:
         """
         A function to apply any arbitrary function on the doubled clip.
 
-        :param func:    This can be any function that takes a videonode input and returns a videonode.
-                        You are responsible for keeping the format the same.
+        :param func:    This can be any function or list of functions that take a videonode input
+                        and returns a videonode. You are responsible for keeping the format the same.
         """
         if not self.doubled:
             raise SyntaxError("post_double: Doubled clip has not been generated yet. Please call this after double().")
-        self.doubled = func(self.doubled)
+
+        if not isinstance(func, list):
+            func = [func]
+
+        for f in func:
+            if not callable(f):
+                raise CustomValueError(f"post_double: Function {f.__name__} is not callable!", self.post_double)
+
+            self.doubled = f(self.doubled)
+
         return self
 
     def downscale(self, downscaler: ScalerT | None = None) -> Self:
