@@ -18,7 +18,7 @@ def cope_aa(
     clip: vs.VideoNode,
     multiplier: float | None = None,
     antialiaser: Antialiaser = Eedi3(0.125, 0.25, gamma=65, vthresh0=40, vthresh1=60, field=1, sclip_aa=None),
-    scaler: KernelT | ScalerT | Sequence[Union[KernelT, ScalerT]] = Lanczos,
+    scaler: KernelT | ScalerT | Sequence[Union[KernelT, ScalerT]] = Lanczos(),
     mode: CopeMode | int = CopeMode.Inverse,
     mask: bool | vs.VideoNode = True,
     no_aa_ranges: FrameRangesN = [],
