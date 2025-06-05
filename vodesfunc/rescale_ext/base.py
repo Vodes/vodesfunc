@@ -1,6 +1,6 @@
-from vstools import FunctionUtil, KwargsT, vs, FieldBasedT, core, expect_bits, depth
+from vstools import FunctionUtil, KwargsT, vs, FieldBasedT, core, expect_bits, depth, vs_object
 from vskernels import Kernel, Bilinear, Bicubic, Lanczos
-from typing import Self
+from typing import Self, MutableMapping, TYPE_CHECKING
 from abc import abstractmethod
 
 __all__ = ["RescaleBase", "RescaleNumbers", "descale_rescale"]
@@ -14,7 +14,7 @@ class RescaleNumbers:
     border_handling: int = 0
 
 
-class RescaleBase(RescaleNumbers):
+class RescaleBase(RescaleNumbers, vs_object):
     funcutil: FunctionUtil
     kernel: Kernel
     post_crop: KwargsT
@@ -37,6 +37,22 @@ class RescaleBase(RescaleNumbers):
 
     def _return_linemask(self) -> vs.VideoNode:
         return self.linemask_clip if isinstance(self.linemask_clip, vs.VideoNode) else core.std.BlankClip(self.funcutil.work_clip)
+
+    def __vs_del__(self, core_id: int) -> None:
+        if not TYPE_CHECKING:
+            self.descaled = None
+            self.rescaled = None
+        self.upscaled = None
+        self.doubled = None
+        self.linemask_clip = None
+        self.errormask_clip = None
+        for v in self.__dict__.values():
+            if not isinstance(v, MutableMapping):
+                continue
+
+            for k2, v2 in v.items():
+                if isinstance(v2, vs.VideoNode):
+                    v[k2] = None
 
 
 def descale_rescale(builder: RescaleBase, clip: vs.VideoNode, **kwargs: KwargsT) -> vs.VideoNode:
