@@ -1,4 +1,5 @@
-from vstools import vs, core, depth
+from vstools import vs, core, depth, vs_object
+from typing import TYPE_CHECKING, MutableMapping
 from enum import IntEnum
 from .base import RescaleBase
 
@@ -44,7 +45,7 @@ class RescBuildMixed(RescaleBase):
         self.upscaled = self.upscaled.std.SetFrameProp("RB_Target", self.index)
 
 
-class MixedRB:
+class MixedRB(vs_object):
     """
     Implementation of MixedRescale for RescaleBuilder(s)
 
@@ -128,3 +129,13 @@ class MixedRB:
 
     def get_upscaled(self, *_) -> vs.VideoNode:
         return self.upscaled
+
+    def __vs_del__(self, core_id: int) -> None:
+        if not TYPE_CHECKING:
+            for v in self.__dict__.values():
+                if not isinstance(v, MutableMapping):
+                    continue
+
+                for k2, v2 in v.items():
+                    if isinstance(v2, vs.VideoNode):
+                        v[k2] = None
