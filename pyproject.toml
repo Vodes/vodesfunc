@@ -7,7 +7,7 @@ authors = [{ name = "Vodes", email = "vodes.imp@gmail.com" }]
 dependencies = [
     "Vapoursynth>=66",
     "vsmuxtools>=0.2.1",
-    "vsjetpack>=0.2.2,<0.4.0",
+    "vsjetpack>=0.2.2,<0.5.0",
     "jetpytools>=1.2.3",
     "packaging>=23.2"
 ]
