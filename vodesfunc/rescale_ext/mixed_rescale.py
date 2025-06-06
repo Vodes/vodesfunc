@@ -132,6 +132,11 @@ class MixedRB(vs_object):
 
     def __vs_del__(self, core_id: int) -> None:
         if not TYPE_CHECKING:
+            setattr(self, "upscaled", None)
+            setattr(self, "final", None)
+            setattr(self, "rescaled", None)
+            setattr(self, "credit_mask", None)
+            setattr(self, "line_mask", None)
             for v in self.__dict__.values():
                 if not isinstance(v, MutableMapping):
                     continue
