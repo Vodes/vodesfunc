@@ -1,4 +1,4 @@
-from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT, get_var_infos, FunctionUtil, classproperty
+from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT, get_var_infos, FunctionUtil, classproperty, get_video_format
 from vsrgtools import contrasharpening
 from vsdenoise import MVToolsPreset, MotionMode, SearchMode, prefilter_to_full_range, Prefilter
 
@@ -168,7 +168,7 @@ def schizo_denoise(
 
     :return:            Denoised clip
     """
-    if src.format.color_family != vs.YUV:  # type: ignore
+    if get_video_format(src).color_family != vs.YUV:
         raise ValueError("schizo_denoise: This function expects a full YUV clip.")
 
     if not isinstance(radius, list):
