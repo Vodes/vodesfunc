@@ -1,6 +1,6 @@
 from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT, get_var_infos, FunctionUtil, classproperty
 from vsrgtools import contrasharpening
-from vsdenoise import MVToolsPreset, MotionMode, SearchMode, prefilter_to_full_range
+from vsdenoise import MVToolsPreset, MotionMode, SearchMode, prefilter_to_full_range, Prefilter
 
 from inspect import signature
 from importlib.metadata import version as fetch_version
@@ -82,8 +82,6 @@ def VMDegrain(
     :param smooth:          Run TTempsmooth on the denoised clip if True
     :return:                Denoised clip
     """
-    from vsdenoise import MVTools, SADMode, SearchMode, MotionMode, Prefilter
-
     if isinstance(prefilter, int):
         prefilter = Prefilter(prefilter)
 
