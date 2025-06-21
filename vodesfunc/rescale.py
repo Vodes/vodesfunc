@@ -260,7 +260,10 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
 
         :param downscaler:      Any vsscale scaler to use. Defaults to Linear Hermite.
         """
-        scaler = Hermite(linear=True).ensure_obj(downscaler)
+        if downscaler is None:
+            scaler = Hermite(linear=True)
+        else:
+            scaler = Scaler.ensure_obj(downscaler)
         if not self.doubled:
             raise SyntaxError("Downscale/Final is the last one that should be called in a chain!")
         wclip = self.funcutil.work_clip
