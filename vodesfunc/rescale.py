@@ -12,13 +12,13 @@ from vstools import (
     CustomValueError,
     get_video_format,
 )
-from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite
+from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite, Scaler
 from vsmasktools import EdgeDetectT, KirschTCanny
 from vsrgtools import removegrain
+from vsscale import ArtCNN
 from typing import Self
 import inspect
 
-from .scale import Doubler
 from .rescale_ext import RescBuildFB, RescBuildNonFB
 from .rescale_ext.mixed_rescale import RescBuildMixed
 
@@ -222,19 +222,15 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         self.errormask_clip = replace_ranges(self.errormask_clip, err_mask, ranges)
         return self
 
-    def double(self, upscaler: Doubler | ScalerT | None = None) -> Self:
+    def double(self, upscaler: ScalerT = ArtCNN.R8F64) -> Self:
         """
         Upscales the descaled clip by 2x
 
-        :param upscaler:        Any kind of vsscale scaler. Defaults to Waifu2x.
+        :param upscaler:        Any kind of vsscale scaler. Defaults to ArtCNN.R8F64.
         """
-        if isinstance(upscaler, Doubler):
-            self.doubled = upscaler.double(self.descaled)
-        else:
-            from vsscale import Waifu2x
 
-            scaler = Waifu2x.ensure_obj(upscaler)  # type: ignore
-            self.doubled = scaler.multi(self.descaled)
+        scaler = Scaler.ensure_obj(upscaler)
+        self.doubled = scaler.multi(self.descaled)
         return self
 
     def post_double(self, func: GenericVSFunction | list[GenericVSFunction]) -> Self:
