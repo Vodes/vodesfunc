@@ -104,55 +104,34 @@ def VMDegrain(
             block_size = 128
             overlap = 64
 
-    try:
-        from vsdenoise import (
-            mc_degrain,
-            RFilterMode,
-        )
+    from vsdenoise import (
+        mc_degrain,
+        RFilterMode,
+    )
 
-        if preset is None:
-            raise ValueError("VMDegrain: preset cannot be None when on vsjetpack>=0.3.0!")
+    if preset is None:
+        raise ValueError("VMDegrain: preset cannot be None when on vsjetpack>=0.3.0!")
 
-        # Dirty clean up for random args getting removed from on git.
-        # (You should not be using git jetpack with vodesfunc but it is what it is)
-        mc_degrain_sig = signature(mc_degrain)
-        args = KwargsT(
-            prefilter=prefilter,
-            thsad=thSAD,
-            thsad_recalc=thSAD,
-            blksize=block_size,
-            refine=refine,
-            rfilter=RFilterMode.TRIANGLE,
-            preset=preset,
-            tr=tr,
-        )
-        clean_args = {k: v for k, v in args.items() if k in mc_degrain_sig.parameters}
+    # Dirty clean up for random args getting removed from on git.
+    # (You should not be using git jetpack with vodesfunc but it is what it is)
+    mc_degrain_sig = signature(mc_degrain)
+    args = KwargsT(
+        prefilter=prefilter,
+        thsad=thSAD,
+        thsad_recalc=thSAD,
+        blksize=block_size,
+        refine=refine,
+        rfilter=RFilterMode.TRIANGLE,
+        preset=preset,
+        tr=tr,
+    )
+    clean_args = {k: v for k, v in args.items() if k in mc_degrain_sig.parameters}
 
-        if len(args) != len(clean_args):
-            args_string = ", ".join(list(k for k, _ in args.items() if k not in clean_args))
-            print(f"VMDegrain: A couple of arguments are not passed to mc_degrain anymore! ({args_string})\nPlease do report this to the maintainer.")
+    if len(args) != len(clean_args):
+        args_string = ", ".join(list(k for k, _ in args.items() if k not in clean_args))
+        print(f"VMDegrain: A couple of arguments are not passed to mc_degrain anymore! ({args_string})\nPlease do report this to the maintainer.")
 
-        out = mc_degrain(futil.work_clip, **clean_args)
-    except ImportError:
-        from vsdenoise import PelType
-
-        d_args = KwargsT(
-            prefilter=prefilter,
-            thSAD=thSAD,
-            block_size=block_size,
-            overlap=overlap,
-            sad_mode=SADMode.SPATIAL.same_recalc,
-            search=SearchMode.DIAMOND,
-            motion=MotionMode.HIGH_SAD,
-            pel_type=PelType.BICUBIC,
-            pel=1,
-            refine=refine + 1,  # Refine calcs are broken on the old wrapper, 3 is basically equivalent to 2 on the new one
-            rfilter=2,
-            sharp=2,
-            tr=tr,
-        )
-        d_args.update(**kwargs)
-        out = MVTools.denoise(futil.work_clip, **d_args)
+    out = mc_degrain(futil.work_clip, **clean_args)
 
     if smooth:
         out = out.ttmpsm.TTempSmooth(maxr=1, thresh=1, mdiff=0, strength=1)
