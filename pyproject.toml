@@ -6,8 +6,8 @@ description = "Vodes' random Vapoursynth Functions."
 authors = [{ name = "Vodes", email = "vodes.imp@gmail.com" }]
 dependencies = [
     "Vapoursynth>=66",
-    "vsmuxtools>=0.2.1",
-    "vsjetpack>=0.3.5,<0.6.0",
+    "vsmuxtools>=0.3.0",
+    "vsjetpack>=0.5.3",
     "jetpytools>=1.2.3",
     "packaging>=23.2"
 ]
@@ -39,7 +39,8 @@ indent-width = 4
 target-version = "py311"
 
 [tool.ruff.lint]
-ignore = ["E722"]
+ignore = ["E722", "E501", "RUF022"]
+extend-select = ["F", "E", "RUF"]
 fixable = ["F541", "F401", "E712", "E711"]
 exclude = ["__init__.py"]
 
