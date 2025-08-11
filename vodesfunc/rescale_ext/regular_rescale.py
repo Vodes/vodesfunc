@@ -1,7 +1,7 @@
 from vstools import vs, KwargsT
+from vsscale import ScalingArgs
 
 from .base import RescaleBase, descale_rescale
-from .scaling_args import ScalingArgs
 
 __all__ = ["RescBuildNonFB"]
 

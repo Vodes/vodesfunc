@@ -12,7 +12,7 @@ from vstools import (
     CustomValueError,
     get_video_format,
 )
-from vskernels import KernelT, Kernel, ScalerT, Bilinear, Hermite, Scaler
+from vskernels import KernelLike, Kernel, ScalerLike, Bilinear, Hermite, Scaler
 from vsmasktools import EdgeDetectT, KirschTCanny
 from vsrgtools import removegrain
 from vsscale import ArtCNN
@@ -50,7 +50,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
 
     def descale(
         self,
-        kernel: KernelT,
+        kernel: KernelLike,
         width: int | float,
         height: int | float,
         base_height: int | None = None,
@@ -126,7 +126,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
     def linemask(
         self,
         mask: vs.VideoNode | EdgeDetectT | None = None,
-        downscaler: ScalerT | None = None,
+        downscaler: ScalerLike | None = None,
         maximum_iter: int = 0,
         inflate_iter: int = 0,
         expand: int | tuple[int, int | None] = 0,
@@ -222,7 +222,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         self.errormask_clip = replace_ranges(self.errormask_clip, err_mask, ranges)
         return self
 
-    def double(self, upscaler: ScalerT = ArtCNN.R8F64) -> Self:
+    def double(self, upscaler: ScalerLike = ArtCNN.R8F64) -> Self:
         """
         Upscales the descaled clip by 2x
 
@@ -230,7 +230,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         """
 
         scaler = Scaler.ensure_obj(upscaler)
-        self.doubled = scaler.multi(self.descaled)
+        self.doubled = scaler.supersample(self.descaled)
         return self
 
     def post_double(self, func: GenericVSFunction | list[GenericVSFunction]) -> Self:
@@ -254,7 +254,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
 
         return self
 
-    def downscale(self, downscaler: ScalerT | None = None) -> Self:
+    def downscale(self, downscaler: ScalerLike | None = None) -> Self:
         """
         Downscales the clip back the size of the original input clip and applies the masks, if any.
 
