@@ -24,11 +24,12 @@ class MVPresets:
         """
         This is just me throwing stuff at the wall to have some improvements without major slowdowns.
         """
-        from vsdenoise import AnalyzeArgs, RecalculateArgs
+        from vsdenoise import AnalyzeArgs, RecalculateArgs, SuperArgs, RFilterMode
 
         return MVToolsPreset(
             pel=1,
             search_clip=prefilter_to_full_range,
+            super_args=SuperArgs(rfilter=RFilterMode.TRIANGLE),
             analyze_args=AnalyzeArgs(truemotion=MotionMode.SAD, search=SearchMode.HEXAGON, pelsearch=2),
             recalculate_args=RecalculateArgs(truemotion=MotionMode.SAD, search=SearchMode.HEXAGON, searchparam=1),
         )
@@ -39,12 +40,13 @@ class MVPresets:
         Preset to match the old wrapper as well as possible.
         It is arguable if this is desirable.
         """
-        from vsdenoise import AnalyzeArgs, RecalculateArgs
+        from vsdenoise import AnalyzeArgs, RecalculateArgs, SuperArgs, RFilterMode
 
         return MVToolsPreset(
             pel=1,
             pad=16,
             search_clip=prefilter_to_full_range,
+            super_args=SuperArgs(rfilter=RFilterMode.TRIANGLE),
             analyze_args=AnalyzeArgs(truemotion=MotionMode.SAD, search=SearchMode.DIAMOND, pelsearch=2),
             recalculate_args=RecalculateArgs(truemotion=MotionMode.SAD, search=SearchMode.ONETIME, searchparam=0),
         )
@@ -102,10 +104,7 @@ def VMDegrain(
             block_size = 128
             overlap = 64
 
-    from vsdenoise import (
-        mc_degrain,
-        RFilterMode,
-    )
+    from vsdenoise import mc_degrain
 
     if preset is None:
         raise ValueError("VMDegrain: preset cannot be None when on vsjetpack>=0.3.0!")
@@ -119,7 +118,6 @@ def VMDegrain(
         thsad_recalc=thSAD,
         blksize=block_size,
         refine=refine,
-        rfilter=RFilterMode.TRIANGLE,
         preset=preset,
         tr=tr,
     )
