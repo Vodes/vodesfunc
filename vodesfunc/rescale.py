@@ -1,16 +1,16 @@
 from vstools import (
-    vs,
-    core,
+    CustomValueError,
+    FieldBased,
+    FieldBasedT,
+    FrameRangesN,
     FunctionUtil,
     GenericVSFunction,
+    core,
+    get_peak_value,
+    get_video_format,
     limiter,
     replace_ranges,
-    FrameRangesN,
-    get_peak_value,
-    FieldBasedT,
-    FieldBased,
-    CustomValueError,
-    get_video_format,
+    vs,
 )
 from vskernels import KernelLike, Kernel, ScalerLike, Bilinear, Hermite, Scaler
 from vsmasktools import EdgeDetectT, KirschTCanny
@@ -22,12 +22,13 @@ from typing import Self
 import inspect
 
 from .rescale_ext import RescBuildFB, RescBuildNonFB
+from .rescale_ext.ignoremask import IgnoreMask
 from .rescale_ext.mixed_rescale import RescBuildMixed
 
 __all__ = ["RescaleBuilder"]
 
 
-class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
+class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed, IgnoreMask):
     """
     The fancy new rescale wrapper to make life easier.
     Now 99% less buggy and should handle everything.
@@ -87,6 +88,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         self.kernel = Kernel.ensure_obj(kernel)
         self.border_handling = self.kernel.kwargs.pop("border_handling", 0)
         self.field_based = FieldBased.from_param(field_based) or FieldBased.from_video(clip)
+        self.ignore_mask = self.kernel.kwargs.pop("ignore_mask", None)
 
         self.height = height if "h" in mode else clip.height
         self.width = width if "w" in mode else clip.width
