@@ -4,7 +4,7 @@ from enum import StrEnum
 from math import ceil
 
 from vskernels import Kernel, KernelLike, Lanczos
-from vstools import ColorRange, depth, CustomValueError, get_lowest_value, get_peak_value, scale_value, vs
+from vstools import CustomValueError, scale_value, vs
 
 __all__ = ["DescaleDirection", "IgnoreMask"]
 
@@ -50,6 +50,8 @@ class IgnoreMask:
         clip: vs.VideoNode,
         width: int,
         height: int,
+        dark_thr: float = 0,
+        bright_thr: float = 235,
         direction: DescaleDirection = DescaleDirection.HORIZONTAL,
         kernel: KernelLike = Lanczos,
     ) -> vs.VideoNode:
@@ -60,13 +62,12 @@ class IgnoreMask:
         scale_factor = clip.width / width if direction == DescaleDirection.HORIZONTAL else clip.height / height
         kernel_radius = ceil(kernel.kernel_radius * scale_factor) - 1
 
-        mask = depth(clip, 8).akarin.Expr(
-            f"x {235 - 8} >= "
+        mask = clip.akarin.Expr(
+            f"x {scale_value(dark_thr, 8, clip)} < x {scale_value(bright_thr, 8, clip)} > or "
             f"{'height' if direction == DescaleDirection.VERTICAL else 'width'} "
             f"{'Y' if direction == DescaleDirection.VERTICAL else 'X'} - {kernel_radius} < "
             f"{'Y' if direction == DescaleDirection.VERTICAL else 'X'} {kernel_radius - 1} < or "
-            f"and {get_peak_value(8, range_in=ColorRange.FULL)} "
-            f"{get_lowest_value(8, range_in=ColorRange.FULL)} ?",
+            "and 255 0 ?",
             format=vs.GRAY8,
         )
 
