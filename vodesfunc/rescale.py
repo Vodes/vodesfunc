@@ -1,23 +1,24 @@
-from vstools import (
-    vs,
-    core,
-    FunctionUtil,
-    GenericVSFunction,
-    iterate,
-    replace_ranges,
-    FrameRangesN,
-    get_peak_value,
-    FieldBasedT,
-    FieldBased,
-    CustomValueError,
-    get_video_format,
-)
-from vskernels import KernelLike, Kernel, ScalerLike, Bilinear, Hermite, Scaler
+import inspect
+from typing import Self
+
+from vskernels import Bilinear, Hermite, Kernel, KernelLike, Scaler, ScalerLike
 from vsmasktools import EdgeDetectT, KirschTCanny
 from vsrgtools import removegrain
 from vsscale import ArtCNN
-from typing import Self
-import inspect
+from vstools import (
+    CustomValueError,
+    FieldBased,
+    FieldBasedT,
+    FrameRangesN,
+    FunctionUtil,
+    GenericVSFunction,
+    core,
+    get_peak_value,
+    get_video_format,
+    iterate,
+    replace_ranges,
+    vs,
+)
 
 from .rescale_ext import RescBuildFB, RescBuildNonFB
 from .rescale_ext.mixed_rescale import RescBuildMixed
@@ -85,6 +86,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         self.kernel = Kernel.ensure_obj(kernel)
         self.border_handling = self.kernel.kwargs.pop("border_handling", 0)
         self.field_based = FieldBased.from_param(field_based) or FieldBased.from_video(clip)
+        self.ignore_mask = self.kernel.kwargs.pop("ignore_mask", None)
 
         self.height = height if "h" in mode else clip.height
         self.width = width if "w" in mode else clip.width
@@ -184,7 +186,17 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         err_mask = removegrain(err_mask, 6)
         err_mask = self._process_mask(err_mask, maximum_iter, inflate_iter, expand)
 
-        return err_mask
+        if not self.ignore_mask:
+            return err_mask
+
+        masks = []
+
+        for ignore_mask in self.ignore_masks:
+            masks.append(ignore_mask.resize.Point(err_mask.width, err_mask.height, err_mask.format))  # type: ignore
+
+        ignore_mask = core.std.Expr(masks, "x y max", format=err_mask.format)
+
+        return core.std.Expr([err_mask, ignore_mask], "x y - abs")
 
     def errormask(
         self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3, expand: int | tuple[int, int | None] = 0
