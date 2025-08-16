@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from math import ceil
 
 from vskernels import Kernel, KernelLike, Lanczos
-from vstools import ColorRange, CustomValueError, get_lowest_value, get_peak_value, scale_value, vs
-
-from .base import RescaleBase
+from vstools import ColorRange, depth, CustomValueError, get_lowest_value, get_peak_value, scale_value, vs
 
 __all__ = ["DescaleDirection", "IgnoreMask"]
 
@@ -38,17 +37,14 @@ class DescaleDirection(StrEnum):
 
         raise CustomValueError("Cannot determine descale direction from given dimensions!", cls.from_ref)
 
-    @property
-    def expr_size(self) -> str:
-        """Get the size expr param"""
 
-        if self == DescaleDirection.VERTICAL:
-            return "height"
+class IgnoreMask:
+    ignore_mask: vs.VideoNode | None = None
+    """User-passed ignore mask"""
 
-        return "width"
+    ignore_masks: list[vs.VideoNode] = []
+    """Generated ignore masks."""
 
-
-class IgnoreMask(RescaleBase):
     def _clipping_mask(
         self,
         clip: vs.VideoNode,
@@ -62,14 +58,18 @@ class IgnoreMask(RescaleBase):
         kernel = Kernel.ensure_obj(kernel)
 
         scale_factor = clip.width / width if direction == DescaleDirection.HORIZONTAL else clip.height / height
-        threshold = scale_value(get_peak_value(clip, range_in=ColorRange.LIMITED) - 8, 8, 32, scale_offsets=True)
-        kernel_radius = kernel.kernel_radius * scale_factor
+        kernel_radius = ceil(kernel.kernel_radius * scale_factor) - 1
 
-        return clip.akarin.Expr(
-            f"x {threshold} >= "
-            f"{direction.expr_size} {direction.value} - {kernel_radius + 1} < "
-            f"{direction.value} {kernel_radius} < or and "
-            f"{get_peak_value(8, range_in=ColorRange.FULL)} "
+        mask = depth(clip, 8).akarin.Expr(
+            f"x {235 - 8} >= "
+            f"{'height' if direction == DescaleDirection.VERTICAL else 'width'} "
+            f"{'Y' if direction == DescaleDirection.VERTICAL else 'X'} - {kernel_radius} < "
+            f"{'Y' if direction == DescaleDirection.VERTICAL else 'X'} {kernel_radius - 1} < or "
+            f"and {get_peak_value(8, range_in=ColorRange.FULL)} "
             f"{get_lowest_value(8, range_in=ColorRange.FULL)} ?",
             format=vs.GRAY8,
         )
+
+        self.ignore_masks += [mask]
+
+        return mask
