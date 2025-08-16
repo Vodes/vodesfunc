@@ -22,13 +22,12 @@ from typing import Self
 import inspect
 
 from .rescale_ext import RescBuildFB, RescBuildNonFB
-from .rescale_ext.ignoremask import IgnoreMask
 from .rescale_ext.mixed_rescale import RescBuildMixed
 
 __all__ = ["RescaleBuilder"]
 
 
-class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed, IgnoreMask):
+class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
     """
     The fancy new rescale wrapper to make life easier.
     Now 99% less buggy and should handle everything.
@@ -188,7 +187,17 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed, IgnoreMask):
         err_mask = remove_grain(err_mask, 6)
         err_mask = self._process_mask(err_mask, maximum_iter, inflate_iter, expand)
 
-        return err_mask
+        if not self.ignore_mask:
+            return err_mask
+
+        masks = []
+
+        for ignore_mask in self.ignore_masks:
+            masks.append(ignore_mask.resize.Point(err_mask.width, err_mask.height, err_mask.format))  # type: ignore
+
+        ignore_mask = core.std.Expr(masks, "x y max", format=err_mask.format)
+
+        return core.std.Expr([err_mask, ignore_mask], "x y - abs")
 
     def errormask(
         self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3, expand: int | tuple[int, int | None] = 0
