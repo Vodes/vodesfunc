@@ -195,9 +195,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         for ignore_mask in self.ignore_masks:
             masks.append(ignore_mask.resize.Point(err_mask.width, err_mask.height, err_mask.format))  # type: ignore
 
-        ignore_mask = core.std.Expr(masks, "x y max", format=err_mask.format)
-
-        return core.std.Expr([err_mask, ignore_mask], "x y - abs")
+        return norm_expr([*masks, err_mask], "x y max z - 0 1 clip", format=err_mask.format)
 
     def errormask(
         self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3, expand: int | tuple[int, int | None] = 0
