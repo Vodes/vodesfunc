@@ -1,4 +1,5 @@
 from vstools import vs, core, depth, get_y, get_h, get_w
+from vsexprtools import norm_expr
 from typing import Any
 from math import ceil
 from functools import partial
@@ -39,7 +40,7 @@ def dirty_prop_set(
         weighted_thr = threshold * (1 - (1 - brightness) ** (brightness**2 * luma_scaling))  # type: ignore
         if debug_output:
             print(f"Frame {n}: Average Brightness - {brightness:.20f}, Weighted - {weighted_thr:.20f}")
-        return core.std.Expr([clip_a, clip_b], [f"y x - {weighted_thr} > 65536 0 ?", ""])
+        return norm_expr([clip_a, clip_b], "y x - {weighted_thr} > range_max 0 ?", 0, weighted_thr=weighted_thr)
 
     try:
         import awsmfunc as awf
