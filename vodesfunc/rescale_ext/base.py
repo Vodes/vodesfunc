@@ -1,4 +1,4 @@
-from vstools import FunctionUtil, KwargsT, vs, FieldBasedT, core, expect_bits, depth, vs_object
+from vstools import FunctionUtil, KwargsT, vs, FieldBasedT, core, expect_bits, depth, vs_object, get_neutral_value
 from vskernels import Kernel, Bilinear, Bicubic, Lanczos
 from typing import Self, MutableMapping, TYPE_CHECKING
 from abc import abstractmethod
@@ -53,6 +53,18 @@ class RescaleBase(RescaleNumbers, vs_object):
             for k2, v2 in v.items():
                 if isinstance(v2, vs.VideoNode):
                     v[k2] = None
+
+    def _border_ringing_clip(self, clip: vs.VideoNode) -> vs.VideoNode:
+        """
+        Create a neutral clip that contains a diff of the border ringing
+        caused by the kernel used to descale the clip.
+        """
+
+        if not self.descaled:
+            raise AttributeError("Descaled clip is not set!")
+
+        neutral_clip_desc = self.descaled.std.BlankClip(color=get_neutral_value(32), format=vs.GRAYS)
+        return descale_rescale(self, neutral_clip_desc, **(self.rescale_args | dict(width=clip.width, height=clip.height)))
 
 
 def descale_rescale(builder: RescaleBase, clip: vs.VideoNode, **kwargs: KwargsT) -> vs.VideoNode:

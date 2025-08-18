@@ -4,6 +4,7 @@ from enum import StrEnum
 from math import ceil
 
 from vskernels import Kernel, KernelLike, Lanczos
+from vsscale import RescaleBase
 from vstools import CustomValueError, scale_value, vs
 
 __all__ = ["DescaleDirection", "IgnoreMask"]
@@ -38,7 +39,7 @@ class DescaleDirection(StrEnum):
         raise CustomValueError("Cannot determine descale direction from given dimensions!", cls.from_ref)
 
 
-class IgnoreMask:
+class IgnoreMask(RescaleBase):
     ignore_mask: vs.VideoNode | None = None
     """User-passed ignore mask"""
 
