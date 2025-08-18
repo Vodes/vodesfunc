@@ -4,8 +4,9 @@ from enum import StrEnum
 from math import ceil
 
 from vskernels import Kernel, KernelLike, Lanczos
-from vsscale import RescaleBase
 from vstools import CustomValueError, scale_value, vs
+
+from .base import RescaleBase
 
 __all__ = ["DescaleDirection", "IgnoreMask"]
 
