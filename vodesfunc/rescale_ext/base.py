@@ -63,7 +63,7 @@ class RescaleBase(RescaleNumbers, vs_object):
         if not self.descaled:
             raise AttributeError("Descaled clip is not set!")
 
-        neutral_clip_desc = self.descaled.std.BlankClip(color=get_neutral_value(32), format=vs.GRAYS)
+        neutral_clip_desc = self.descaled.std.BlankClip(color=0.5, format=vs.GRAYS)
         return descale_rescale(self, neutral_clip_desc, **(self.rescale_args | dict(width=clip.width, height=clip.height)))
 
 
