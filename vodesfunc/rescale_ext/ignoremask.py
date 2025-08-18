@@ -44,7 +44,7 @@ class IgnoreMask(RescaleBase):
     ignore_mask: vs.VideoNode | None = None
     """User-passed ignore mask"""
 
-    ignore_masks: list[vs.VideoNode] = []
+    ignore_masks: list[vs.VideoNode] | None = None
     """Generated ignore masks."""
 
     def _clipping_mask(
@@ -72,6 +72,9 @@ class IgnoreMask(RescaleBase):
             "and 255 0 ?",
             format=vs.GRAY8,
         )
+
+        if self.ignore_masks is None:
+            self.ignore_masks = []
 
         self.ignore_masks += [mask]
 
