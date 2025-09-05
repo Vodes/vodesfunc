@@ -23,14 +23,13 @@ def border_clipping_mask(
     scale_factor = clip.width / scaling_args.width if scaling_args.mode == "w" else clip.height / scaling_args.height
     kernel_radius = ceil(kernel.kernel_radius * scale_factor) - 1
 
-    neutral_blank = core.std.BlankClip(clip, color=0.5)
-    descale_args = dict(
+    size_args = dict(
         width=scaling_args.width if scaling_args.mode == "w" else clip.width,
         height=scaling_args.height if scaling_args.mode == "h" else clip.height,
     )
-    neutral_descaled = kernel.descale(neutral_blank, **(scaling_args.kwargs() | descale_args))
+    neutral_native = core.std.BlankClip(clip, color=0.5, **size_args)
     neutral_rescaled = descale_rescale(
-        neutral_descaled, kernel, width=clip.width, height=clip.height, border_handling=int(border_handling), **scaling_args.kwargs()
+        neutral_native, kernel, width=clip.width, height=clip.height, border_handling=int(border_handling), **scaling_args.kwargs()
     )
     # Whatever you wanna do with it here I guess?
 
