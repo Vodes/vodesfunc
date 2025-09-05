@@ -1,81 +1,45 @@
 from __future__ import annotations
 
-from enum import StrEnum
 from math import ceil
 
-from vskernels import Kernel, KernelLike, Lanczos
-from vstools import CustomValueError, scale_value, vs
+from vskernels import Kernel
+from vsscale import ScalingArgs
+from vskernels import BorderHandling
+from vstools import scale_value, vs, core
 
-from .base import RescaleBase
+from .base import descale_rescale
 
-__all__ = ["DescaleDirection", "IgnoreMask"]
-
-
-class DescaleDirection(StrEnum):
-    """The direction the descale is performed in."""
-
-    HORIZONTAL = "X"
-    """Descale is performed horizontally (ex. 1920x1080 => 1280x1080)"""
-
-    VERTICAL = "Y"
-    """Descale is performed vertically (ex. 1920x1080 => 1920x720)"""
-
-    @classmethod
-    def from_ref(cls, src: vs.VideoNode | tuple[int, int], width: int, height: int) -> DescaleDirection:
-        """Get the direction from a reference."""
-
-        if isinstance(src, vs.VideoNode):
-            src = (src.width, src.height)
-
-        assert isinstance(src, tuple) and all(int(x) for x in src), "You must pass a tuple of ints or a VideoNode!"
-
-        if src == (width, height):
-            raise CustomValueError("Reference dimensions are the same as the output dimensions!", cls.from_ref)
-
-        if src[0] != width and src[1] == height:
-            return cls.HORIZONTAL
-        elif src[0] == width and src[1] != height:
-            return cls.VERTICAL
-
-        raise CustomValueError("Cannot determine descale direction from given dimensions!", cls.from_ref)
+__all__ = ["border_clipping_mask"]
 
 
-class IgnoreMask(RescaleBase):
-    ignore_mask: vs.VideoNode | None = None
-    """User-passed ignore mask"""
+def border_clipping_mask(
+    clip: vs.VideoNode,
+    scaling_args: ScalingArgs,
+    kernel: Kernel,
+    border_handling: BorderHandling,
+    dark_thr: int = 0,
+    bright_thr: int = 235,
+) -> vs.VideoNode:
+    scale_factor = clip.width / scaling_args.width if scaling_args.mode == "w" else clip.height / scaling_args.height
+    kernel_radius = ceil(kernel.kernel_radius * scale_factor) - 1
 
-    ignore_masks: list[vs.VideoNode] | None = None
-    """Generated ignore masks."""
+    neutral_blank = core.std.BlankClip(clip, color=0.5)
+    descale_args = dict(
+        width=scaling_args.width if scaling_args.mode == "w" else clip.width,
+        height=scaling_args.height if scaling_args.mode == "h" else clip.height,
+    )
+    neutral_descaled = kernel.descale(neutral_blank, **(scaling_args.kwargs() | descale_args))
+    neutral_rescaled = descale_rescale(
+        neutral_descaled, kernel, width=clip.width, height=clip.height, border_handling=int(border_handling), **scaling_args.kwargs()
+    )
+    # Whatever you wanna do with it here I guess?
 
-    def _clipping_mask(
-        self,
-        clip: vs.VideoNode,
-        width: int,
-        height: int,
-        dark_thr: float = 0,
-        bright_thr: float = 235,
-        direction: DescaleDirection = DescaleDirection.HORIZONTAL,
-        kernel: KernelLike = Lanczos,
-    ) -> vs.VideoNode:
-        """Create a clipping mask to pass to descale as an ignore_mask."""
-
-        kernel = Kernel.ensure_obj(kernel)
-
-        scale_factor = clip.width / width if direction == DescaleDirection.HORIZONTAL else clip.height / height
-        kernel_radius = ceil(kernel.kernel_radius * scale_factor) - 1
-
-        mask = clip.akarin.Expr(
-            f"x {scale_value(dark_thr, 8, clip)} < x {scale_value(bright_thr, 8, clip)} > or "
-            f"{'height' if direction == DescaleDirection.VERTICAL else 'width'} "
-            f"{'Y' if direction == DescaleDirection.VERTICAL else 'X'} - {kernel_radius} < "
-            f"{'Y' if direction == DescaleDirection.VERTICAL else 'X'} {kernel_radius - 1} < or "
-            "and 255 0 ?",
-            format=vs.GRAY8,
-        )
-
-        if self.ignore_masks is None:
-            self.ignore_masks = []
-
-        self.ignore_masks += [mask]
-
-        return mask
+    mask = clip.akarin.Expr(
+        f"x {scale_value(dark_thr, 8, clip)} < x {scale_value(bright_thr, 8, clip)} > or "
+        f"{'height' if scaling_args.mode == 'h' else 'width'} "
+        f"{'Y' if scaling_args.mode == 'h' else 'X'} - {kernel_radius} < "
+        f"{'Y' if scaling_args.mode == 'h' else 'X'} {kernel_radius - 1} < or "
+        "and 255 0 ?",
+        format=vs.GRAY8,
+    )
+    return mask

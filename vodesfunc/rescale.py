@@ -21,7 +21,7 @@ from vsscale import ArtCNN
 from typing import Self
 import inspect
 
-from .rescale_ext import RescBuildFB, RescBuildNonFB
+from .rescale_ext import RescBuildFB, RescBuildNonFB, Ignore_Mask_Func
 from .rescale_ext.mixed_rescale import RescBuildMixed
 
 __all__ = ["RescaleBuilder"]
@@ -59,6 +59,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         base_width: int | None = None,
         shift: tuple[float, float] = (0, 0),
         field_based: FieldBasedT | None = None,
+        ignore_mask: bool | vs.VideoNode | Ignore_Mask_Func = False,
         mode: str = "hw",
     ) -> Self:
         """
@@ -87,7 +88,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         self.kernel = Kernel.ensure_obj(kernel)
         self.border_handling = self.kernel.kwargs.pop("border_handling", 0)
         self.field_based = FieldBased.from_param(field_based) or FieldBased.from_video(clip)
-        self.ignore_mask = self.kernel.kwargs.pop("ignore_mask", None)
+        self.ignore_mask = self.kernel.kwargs.pop("ignore_mask", ignore_mask)
 
         self.height = height if "h" in mode else clip.height
         self.width = width if "w" in mode else clip.width
