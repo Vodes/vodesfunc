@@ -1,7 +1,9 @@
 from vstools import vs, KwargsT
+from vskernels import BorderHandling
 from vsscale import ScalingArgs
 
 from .base import RescaleBase, descale_rescale
+from .ignoremask import border_clipping_mask
 
 __all__ = ["RescBuildNonFB"]
 
@@ -22,6 +24,10 @@ class RescBuildNonFB(RescaleBase):
         )
 
         args = KwargsT(width=sc_args.width, height=sc_args.height, border_handling=self.border_handling) | sc_args.kwargs()
+
+        if isinstance(self.ignore_mask, vs.VideoNode):
+            args = args | dict(ignore_mask=self.ignore_mask)
+
         self.post_crop = sc_args.kwargs(2)
         self.rescale_args = sc_args.kwargs()
 
@@ -32,5 +38,29 @@ class RescBuildNonFB(RescaleBase):
         self.base_height = base_height
         self.base_width = base_width
 
-        self.descaled = self.kernel.descale(clip, **args)
-        self.rescaled = descale_rescale(self, self.descaled, width=clip.width, height=clip.height, **self.rescale_args)
+        if self.ignore_mask and not isinstance(self.ignore_mask, vs.VideoNode) and mode.lower() in ("wh", "hw"):
+            if not callable(self.ignore_mask):
+                self.ignore_mask = border_clipping_mask
+
+            sc_args_w = ScalingArgs.from_args(
+                clip, height=height, width=width, base_height=base_height, base_width=base_width, src_top=shift[0], src_left=shift[1], mode="w"
+            )
+            sc_args_h = ScalingArgs.from_args(
+                clip, height=height, width=width, base_height=base_height, base_width=base_width, src_top=shift[0], src_left=shift[1], mode="h"
+            )
+
+            ignore_mask_w = self.ignore_mask(clip, sc_args_w, self.kernel, BorderHandling(self.border_handling))
+            self.descaled = self.kernel.descale(
+                clip, **(sc_args_w.kwargs() | dict(border_handling=self.border_handling, width=sc_args_w.width, ignore_mask=ignore_mask_w))
+            )
+
+            ignore_mask_h = self.ignore_mask(self.descaled, sc_args_h, self.kernel, BorderHandling(self.border_handling))
+            self.descaled = self.kernel.descale(
+                self.descaled, **(sc_args_h.kwargs() | dict(border_handling=self.border_handling, height=sc_args_w.height, ignore_mask=ignore_mask_h))
+            )
+        else:
+            self.descaled = self.kernel.descale(clip, **args)
+
+        self.rescaled = descale_rescale(
+            self.descaled, self.kernel, **(self.rescale_args | dict(width=clip.width, height=clip.height, border_handling=self.border_handling))
+        )
