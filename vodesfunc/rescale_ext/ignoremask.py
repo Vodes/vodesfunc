@@ -15,8 +15,8 @@ def border_clipping_mask(
     scaling_args: ScalingArgs,
     kernel: Kernel,
     border_handling: BorderHandling,
-    dark_thr: int = 0,
-    bright_thr: int = 255,
+    dark_thr: float = 0.0,
+    bright_thr: float = 1.0,
 ) -> vs.VideoNode:
     size_args = dict(
         width=scaling_args.width if scaling_args.mode == "w" else clip.width,
@@ -32,8 +32,8 @@ def border_clipping_mask(
         **scaling_args.kwargs(),
     )
 
-    return core.akarin.Expr(
+    return core.std.Expr(
         [clip, blank],
-        f"y 0.5 - dup 0 = not swap x {scale_value(bright_thr, 8, clip)} >= 255 0 ? x {scale_value(dark_thr, 8, clip)} <= 255 0 ? ? 0 ?",
+        f"y 0.5 - dup 0 = not swap x {bright_thr} >= 255 0 ? x {dark_thr} <= 255 0 ? ? 0 ?",
         format=vs.GRAY8,
     )
