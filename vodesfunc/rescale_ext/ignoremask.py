@@ -33,7 +33,7 @@ def border_clipping_mask(
     )
 
     return core.akarin.Expr(
-        [blank, clip],
-        f"x 0.5 - dup 0 = not swap y {scale_value(bright_thr, 8, clip)} >= 255 0 ? y {scale_value(dark_thr, 8, clip)} <= 255 0 ? ? 0 ?",
+        [clip, blank],
+        f"y 0.5 - dup 0 = not swap x {scale_value(bright_thr, 8, clip)} >= 255 0 ? x {scale_value(dark_thr, 8, clip)} <= 255 0 ? ? 0 ?",
         format=vs.GRAY8,
     )
