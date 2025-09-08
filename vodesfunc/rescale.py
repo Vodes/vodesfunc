@@ -191,6 +191,9 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         if not self.ignore_mask:
             return err_mask
 
+        if not hasattr(self, "ignore_masks"):
+            raise SyntaxError("RescaleBuilder: Ignore masks have not been set.")
+
         return norm_expr([err_mask, *self.ignore_masks], "y z max 0 x ?")
 
     def errormask(
