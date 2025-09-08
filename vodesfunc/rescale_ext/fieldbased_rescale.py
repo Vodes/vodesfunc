@@ -1,4 +1,4 @@
-from vstools import vs, KwargsT, FieldBased, padder
+from vstools import vs, KwargsT, FieldBased, padder, limiter
 
 from .base import RescaleBase
 
@@ -16,7 +16,7 @@ class RescBuildFB(RescaleBase):
         self.post_crop = KwargsT()
 
         if not self.border_handling:
-            self.rescaled = self.kernel.scale(self.descaled, width=clip.width, height=clip.height)
+            self.rescaled = limiter(self.kernel.scale(self.descaled, width=clip.width, height=clip.height))
         else:
             # Reimplementation of border_handling because regular scale operations aren't aware of it yet.
             # Can't use descale scale because we need vskernels to handle the field shifting.
@@ -42,13 +42,15 @@ class RescBuildFB(RescaleBase):
 
             src_width = descale_args.pop("src_width", wclip.width)
             src_height = descale_args.pop("src_height", wclip.height)
-            self.rescaled = self.kernel.scale(
-                wclip,
-                clip.width,
-                clip.height,
-                shift=shift,
-                src_width=src_width - (wclip.width - self.width),
-                src_height=src_height - (wclip.height - self.height),
+            self.rescaled = limiter(
+                self.kernel.scale(
+                    wclip,
+                    clip.width,
+                    clip.height,
+                    shift=shift,
+                    src_width=src_width - (wclip.width - self.width),
+                    src_height=src_height - (wclip.height - self.height),
+                )
             )
         self.descaled = FieldBased.PROGRESSIVE.apply(self.descaled)
         self.rescaled = FieldBased.PROGRESSIVE.apply(self.rescaled)
