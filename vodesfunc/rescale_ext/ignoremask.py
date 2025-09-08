@@ -3,7 +3,8 @@ from __future__ import annotations
 from vskernels import Kernel
 from vsscale import ScalingArgs
 from vskernels import BorderHandling
-from vstools import scale_value, vs, core
+from vsexprtools import norm_expr
+from vstools import vs
 
 from .base import descale_rescale
 
@@ -15,8 +16,8 @@ def border_clipping_mask(
     scaling_args: ScalingArgs,
     kernel: Kernel,
     border_handling: BorderHandling,
-    dark_thr: float = 0.0,
-    bright_thr: float = 1.0,
+    dark_thr: float | None = None,
+    bright_thr: float | None = 1.0,
 ) -> vs.VideoNode:
     size_args = dict(
         width=scaling_args.width if scaling_args.mode == "w" else clip.width,
@@ -32,8 +33,10 @@ def border_clipping_mask(
         **scaling_args.kwargs(),
     )
 
-    return core.std.Expr(
+    return norm_expr(
         [clip, blank],
-        f"y 0.5 - dup 0 = not swap x {bright_thr} >= 255 0 ? x {dark_thr} <= 255 0 ? ? 0 ?",
+        "y 0.5 - dup 0 = 0 swap2 {bright_expr} {dark_expr} ? ?",
+        bright_expr="0" if bright_thr is None else f"x {bright_thr} >= 255 0 ?",
+        dark_expr="0" if dark_thr is None else f"x {dark_thr} <= 255 0 ?",
         format=vs.GRAY8,
     )
