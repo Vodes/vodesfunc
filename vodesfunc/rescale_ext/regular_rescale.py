@@ -58,6 +58,8 @@ class RescBuildNonFB(RescaleBase):
             self.descaled = self.kernel.descale(
                 self.descaled, **(sc_args_h.kwargs() | dict(border_handling=self.border_handling, height=sc_args_w.height, ignore_mask=ignore_mask_h))
             )
+
+            self.ignore_masks = tuple(x.resize.Bilinear(clip.width, clip.height, vs.GRAYS) for x in (ignore_mask_w, ignore_mask_h))
         else:
             self.descaled = self.kernel.descale(clip, **args)
 
