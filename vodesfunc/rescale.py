@@ -6,7 +6,6 @@ from vstools import (
     FunctionUtil,
     GenericVSFunction,
     core,
-    depth,
     get_peak_value,
     get_video_format,
     limiter,
@@ -195,7 +194,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         if not hasattr(self, "ignore_masks"):
             raise SyntaxError("RescaleBuilder: Ignore masks have not been set.")
 
-        return norm_expr([err_mask, *(depth(x, 32) for x in self.ignore_masks)], "y z max 0 x ?")
+        return norm_expr([err_mask, *self.ignore_masks], "y z max 0 x ?")
 
     def errormask(
         self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3, expand: int | tuple[int, int | None] = 0
