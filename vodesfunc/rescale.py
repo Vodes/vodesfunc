@@ -6,7 +6,6 @@ from vstools import (
     FunctionUtil,
     GenericVSFunction,
     core,
-    get_peak_value,
     get_video_format,
     limiter,
     replace_ranges,
@@ -170,7 +169,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
             from .misc import get_border_crop
 
             borders = get_border_crop(self.funcutil.work_clip, self, kernel_window)
-            self.linemask_clip = self.linemask_clip.std.Crop(*borders).std.AddBorders(*borders, [get_peak_value(self.linemask_clip)])
+            self.linemask_clip = self.linemask_clip.std.Crop(*borders).std.AddBorders(*borders, 1)
 
         self.linemask_clip = limiter(self.linemask_clip)
 
@@ -185,16 +184,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
             return limiter(mask)
 
         err_mask = norm_expr([self.funcutil.work_clip, self.rescaled], "x y - abs {mask} < 0 1 ?", mask=mask)
-        err_mask = remove_grain(err_mask, 6)
-        err_mask = self._process_mask(err_mask, maximum_iter, inflate_iter, expand)
-
-        if not self.ignore_mask:
-            return err_mask
-
-        if not hasattr(self, "ignore_masks"):
-            raise SyntaxError("RescaleBuilder: Ignore masks have not been set.")
-
-        return norm_expr([err_mask, *self.ignore_masks], "y z max 0 x ?")
+        return self._process_mask(remove_grain(err_mask, 6), maximum_iter, inflate_iter, expand)
 
     def errormask(
         self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3, expand: int | tuple[int, int | None] = 0

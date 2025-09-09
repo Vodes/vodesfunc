@@ -1,4 +1,4 @@
-from vstools import FunctionUtil, KwargsT, vs, FieldBasedT, core, expect_bits, depth, vs_object
+from vstools import FunctionUtil, KwargsT, vs, FieldBasedT, core, vs_object
 from vskernels import Kernel, Bilinear, Bicubic, Lanczos, BorderHandling
 from vsscale import ScalingArgs
 from typing import Self, MutableMapping, TYPE_CHECKING, Callable
@@ -75,5 +75,4 @@ def descale_rescale(clip: vs.VideoNode, kernel: Kernel, **kwargs: KwargsT) -> vs
         raise ValueError(f"{kernel.__class__} is not supported for rescaling!")
 
     kernel_args.update(kwargs)
-    clip, bits = expect_bits(clip, 32)
-    return depth(kernel_function(clip, **kernel_args), bits)
+    return kernel_function(clip, **kernel_args)
