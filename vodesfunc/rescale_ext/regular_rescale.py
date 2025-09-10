@@ -1,4 +1,4 @@
-from vstools import vs, KwargsT, limiter
+from vstools import vs, KwargsT
 from vskernels import BorderHandling
 from vsscale import ScalingArgs
 
@@ -59,8 +59,6 @@ class RescBuildNonFB(RescaleBase):
         else:
             self.descaled = self.kernel.descale(clip, **args)
 
-        self.rescaled = limiter(
-            descale_rescale(
-                self.descaled, self.kernel, **(self.rescale_args | dict(width=clip.width, height=clip.height, border_handling=self.border_handling))
-            )
+        self.rescaled = descale_rescale(
+            self.descaled, self.kernel, **(self.rescale_args | dict(width=clip.width, height=clip.height, border_handling=self.border_handling))
         )

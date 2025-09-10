@@ -183,7 +183,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         if isinstance(mask, vs.VideoNode):
             return limiter(mask)
 
-        err_mask = norm_expr([self.funcutil.work_clip, self.rescaled], "x y - abs {mask} < 0 1 ?", mask=mask)
+        err_mask = norm_expr([self.funcutil.work_clip, self.rescaled], "x 0 1 clip y 0 1 clip - abs {mask} < 0 1 ?", mask=mask)
         return self._process_mask(remove_grain(err_mask, 6), maximum_iter, inflate_iter, expand)
 
     def errormask(
