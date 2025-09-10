@@ -35,7 +35,7 @@ def border_clipping_mask(
 
     return norm_expr(
         [clip, blank],
-        "y 0.5 - dup 0 = 0 swap2 {bright_expr} {dark_expr} ? ?",
+        "y 0.5 - dup 0 = not swap {bright_expr} {dark_expr} ? 0 ?",
         bright_expr="0" if bright_thr is None else f"x {bright_thr} >= 255 0 ?",
         dark_expr="0" if dark_thr is None else f"x {dark_thr} <= 255 0 ?",
         format=vs.GRAY8,
