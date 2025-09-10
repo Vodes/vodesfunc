@@ -42,22 +42,20 @@ class RescBuildNonFB(RescaleBase):
             if not callable(self.ignore_mask):
                 self.ignore_mask = border_clipping_mask
 
-            sc_args_w = ScalingArgs.from_args(
-                clip, height=height, width=width, base_height=base_height, base_width=base_width, src_top=shift[0], src_left=shift[1], mode="w"
-            )
-            sc_args_h = ScalingArgs.from_args(
-                clip, height=height, width=width, base_height=base_height, base_width=base_width, src_top=shift[0], src_left=shift[1], mode="h"
-            )
+            def _descale(clip: vs.VideoNode, sc_args: ScalingArgs, order: str) -> vs.VideoNode:
+                ignore_mask = self.ignore_mask(clip, sc_args, self.kernel, BorderHandling(self.border_handling))  # type:ignore[reportCallableArgument]
+                direction = {"width" if order == "w" else "height": out_width if order == "w" else out_height}
 
-            ignore_mask_w = self.ignore_mask(clip, sc_args_w, self.kernel, BorderHandling(self.border_handling))
-            self.descaled = self.kernel.descale(
-                clip, **(sc_args_w.kwargs() | dict(border_handling=self.border_handling, width=sc_args_w.width, ignore_mask=ignore_mask_w))
-            )
+                return self.kernel.descale(
+                    clip,
+                    **(sc_args.kwargs() | dict(border_handling=self.border_handling, ignore_mask=ignore_mask) | direction),
+                )
 
-            ignore_mask_h = self.ignore_mask(self.descaled, sc_args_h, self.kernel, BorderHandling(self.border_handling))
-            self.descaled = self.kernel.descale(
-                self.descaled, **(sc_args_h.kwargs() | dict(border_handling=self.border_handling, height=sc_args_w.height, ignore_mask=ignore_mask_h))
-            )
+            self.descaled = clip
+            out_width, out_height = sc_args.width, sc_args.height
+
+            for order in mode.lower():
+                self.descaled = _descale(self.descaled, sc_args, order)
         else:
             self.descaled = self.kernel.descale(clip, **args)
 
