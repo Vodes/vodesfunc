@@ -1,4 +1,4 @@
-from vstools import vs, core, depth, vs_object
+from vstools import vs, core, vs_object
 from vsexprtools import norm_expr
 from typing import TYPE_CHECKING, MutableMapping
 from enum import IntEnum
@@ -26,7 +26,7 @@ class RescBuildMixed(RescaleBase):
     index = 0
 
     def get_diff(self) -> vs.VideoNode:
-        clip = depth(self.funcutil.work_clip, 32)
+        clip = self.funcutil.work_clip, 32
         match self.diffmode:
             case DiffMode.MAE:
                 metric = "- abs"
