@@ -13,7 +13,7 @@ from vstools import (
     get_video_format,
 )
 from vskernels import KernelLike, Kernel, ScalerLike, Bilinear, Hermite, Scaler
-from vsmasktools import EdgeDetectT, KirschTCanny
+from vsmasktools import EdgeDetectT, EdgeDetect
 from vsmasktools import Morpho, XxpandMode
 from vsexprtools import norm_expr
 from vsrgtools import remove_grain
@@ -152,7 +152,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         if isinstance(mask, vs.VideoNode):
             self.linemask_clip = mask
             return self
-        edgemaskFunc = KirschTCanny.ensure_obj(mask)
+        edgemaskFunc = EdgeDetect.ensure_obj(mask)
 
         # Perform on doubled clip if exists and downscale
         if self.doubled:
