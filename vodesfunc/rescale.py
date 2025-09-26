@@ -1,16 +1,15 @@
 from vstools import (
-    vs,
-    core,
+    CustomValueError,
+    FieldBased,
+    FieldBasedT,
+    FrameRangesN,
     FunctionUtil,
     GenericVSFunction,
+    core,
+    get_video_format,
     limiter,
     replace_ranges,
-    FrameRangesN,
-    get_peak_value,
-    FieldBasedT,
-    FieldBased,
-    CustomValueError,
-    get_video_format,
+    vs,
 )
 from vskernels import KernelLike, Kernel, ScalerLike, Bilinear, Hermite, Scaler
 from vsmasktools import EdgeDetectT, EdgeDetect
@@ -21,7 +20,7 @@ from vsscale import ArtCNN
 from typing import Self
 import inspect
 
-from .rescale_ext import RescBuildFB, RescBuildNonFB
+from .rescale_ext import RescBuildFB, RescBuildNonFB, Ignore_Mask_Func
 from .rescale_ext.mixed_rescale import RescBuildMixed
 
 __all__ = ["RescaleBuilder"]
@@ -59,6 +58,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         base_width: int | None = None,
         shift: tuple[float, float] = (0, 0),
         field_based: FieldBasedT | None = None,
+        ignore_mask: bool | vs.VideoNode | Ignore_Mask_Func = False,
         mode: str = "hw",
     ) -> Self:
         """
@@ -87,6 +87,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         self.kernel = Kernel.ensure_obj(kernel)
         self.border_handling = self.kernel.kwargs.pop("border_handling", 0)
         self.field_based = FieldBased.from_param(field_based) or FieldBased.from_video(clip)
+        self.ignore_mask = self.kernel.kwargs.pop("ignore_mask", ignore_mask)
 
         self.height = height if "h" in mode else clip.height
         self.width = width if "w" in mode else clip.width
@@ -168,7 +169,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
             from .misc import get_border_crop
 
             borders = get_border_crop(self.funcutil.work_clip, self, kernel_window)
-            self.linemask_clip = self.linemask_clip.std.Crop(*borders).std.AddBorders(*borders, [get_peak_value(self.linemask_clip)])
+            self.linemask_clip = self.linemask_clip.std.Crop(*borders).std.AddBorders(*borders, 1)
 
         self.linemask_clip = limiter(self.linemask_clip)
 
@@ -182,11 +183,8 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         if isinstance(mask, vs.VideoNode):
             return limiter(mask)
 
-        err_mask = norm_expr([self.funcutil.work_clip, self.rescaled], "x y - abs {mask} < 0 1 ?", mask=mask)
-        err_mask = remove_grain(err_mask, 6)
-        err_mask = self._process_mask(err_mask, maximum_iter, inflate_iter, expand)
-
-        return err_mask
+        err_mask = norm_expr([self.funcutil.work_clip, self.rescaled], "x 0 1 clip y 0 1 clip - abs {mask} < 0 1 ?", mask=mask)
+        return self._process_mask(remove_grain(err_mask, 6), maximum_iter, inflate_iter, expand)
 
     def errormask(
         self, mask: vs.VideoNode | float = 0.05, maximum_iter: int = 2, inflate_iter: int = 3, expand: int | tuple[int, int | None] = 0
