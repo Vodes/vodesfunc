@@ -26,7 +26,7 @@ class RescBuildMixed(RescaleBase):
     index = 0
 
     def get_diff(self) -> vs.VideoNode:
-        clip = self.funcutil.work_clip, 32
+        clip = self.funcutil.work_clip
         match self.diffmode:
             case DiffMode.MAE:
                 metric = "- abs"
