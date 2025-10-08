@@ -1,4 +1,5 @@
-from vstools import vs, core, depth, vs_object
+from vstools import vs, core, vs_object
+from vsexprtools import norm_expr
 from typing import TYPE_CHECKING, MutableMapping
 from enum import IntEnum
 from .base import RescaleBase
@@ -25,16 +26,16 @@ class RescBuildMixed(RescaleBase):
     index = 0
 
     def get_diff(self) -> vs.VideoNode:
-        clip = depth(self.funcutil.work_clip, 32)
+        clip = self.funcutil.work_clip, 32
         match self.diffmode:
             case DiffMode.MAE:
-                metric = "x y - abs"
+                metric = "- abs"
             case DiffMode.MSE:
-                metric = "x y - 2 pow"
+                metric = "- 2 pow"
             case _:
-                metric = "x y - abs dup 0.015 > swap 0 ?"
+                metric = "- abs dup 0.015 > swap 0 ?"
 
-        diff = core.std.Expr([depth(self.rescaled, 32), clip], metric)
+        diff = norm_expr([self.rescaled, clip], "x 0 1 clip y 0 1 clip {metric}", metric=metric)
         if self.crop_diff:
             diff = diff.std.Crop(5, 5, 5, 5)
         return diff.std.PlaneStats()
@@ -93,7 +94,7 @@ class MixedRB(vs_object):
 
         blank = core.std.BlankClip(None, 1, 1, vs.GRAY8, y.num_frames, keep=True)
 
-        map_prop_srcs = [blank.std.CopyFrameProps(prop_src).akarin.Expr("x.PlaneStatsAverage", vs.GRAYS) for prop_src in prop_srcs]
+        map_prop_srcs = [norm_expr(blank.std.CopyFrameProps(prop_src), "x.PlaneStatsAverage", format=vs.GRAYS) for prop_src in prop_srcs]
 
         base_frame, idx_frames = blank.get_frame(0), []
 

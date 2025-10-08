@@ -1,9 +1,12 @@
-from vstools import FunctionUtil, KwargsT, vs, FieldBasedT, core, expect_bits, depth, vs_object
-from vskernels import Kernel, Bilinear, Bicubic, Lanczos
-from typing import Self, MutableMapping, TYPE_CHECKING
+from vstools import FunctionUtil, KwargsT, vs, FieldBasedT, core, vs_object
+from vskernels import Kernel, Bilinear, Bicubic, Lanczos, BorderHandling
+from vsscale import ScalingArgs
+from typing import Self, MutableMapping, TYPE_CHECKING, Callable
 from abc import abstractmethod
 
-__all__ = ["RescaleBase", "RescaleNumbers", "descale_rescale"]
+__all__ = ["RescaleBase", "RescaleNumbers", "descale_rescale", "Ignore_Mask_Func"]
+
+Ignore_Mask_Func = Callable[[vs.VideoNode, ScalingArgs, Kernel, BorderHandling], vs.VideoNode]
 
 
 class RescaleNumbers:
@@ -21,6 +24,7 @@ class RescaleBase(RescaleNumbers, vs_object):
     rescale_args: KwargsT
     descale_func_args: KwargsT
     field_based: FieldBasedT | None = None
+    ignore_mask: bool | vs.VideoNode | Ignore_Mask_Func
 
     descaled: vs.VideoNode
     rescaled: vs.VideoNode
@@ -46,6 +50,7 @@ class RescaleBase(RescaleNumbers, vs_object):
         self.doubled = None
         self.linemask_clip = None
         self.errormask_clip = None
+        self.ignore_mask = False
         for v in self.__dict__.values():
             if not isinstance(v, MutableMapping):
                 continue
@@ -55,20 +60,19 @@ class RescaleBase(RescaleNumbers, vs_object):
                     v[k2] = None
 
 
-def descale_rescale(builder: RescaleBase, clip: vs.VideoNode, **kwargs: KwargsT) -> vs.VideoNode:
-    kernel_args = KwargsT(border_handling=builder.border_handling)
-    if isinstance(builder.kernel, Bilinear):
+def descale_rescale(clip: vs.VideoNode, kernel: Kernel, **kwargs: KwargsT) -> vs.VideoNode:
+    kernel_args = KwargsT(border_handling=kwargs.pop("border_handling", 0))
+    if isinstance(kernel, Bilinear):
         kernel_function = core.descale.Bilinear
-    elif isinstance(builder.kernel, Bicubic) or issubclass(builder.kernel.__class__, Bicubic):
+    elif isinstance(kernel, Bicubic) or issubclass(kernel.__class__, Bicubic):
         kernel_function = core.descale.Bicubic
-        kernel_args.update({"b": builder.kernel.b, "c": builder.kernel.c})
-    elif isinstance(builder.kernel, Lanczos):
+        kernel_args.update({"b": kernel.b, "c": kernel.c})
+    elif isinstance(kernel, Lanczos):
         kernel_function = core.descale.Lanczos
-        kernel_args.update({"taps": builder.kernel.taps})
+        kernel_args.update({"taps": kernel.taps})
     else:
         # I'm just lazy idk
-        raise ValueError(f"{builder.kernel.__class__} is not supported for rescaling!")
+        raise ValueError(f"{kernel.__class__} is not supported for rescaling!")
 
     kernel_args.update(kwargs)
-    clip, bits = expect_bits(clip, 32)
-    return depth(kernel_function(clip, **kernel_args), bits)
+    return kernel_function(clip, **kernel_args)
