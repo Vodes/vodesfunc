@@ -6,8 +6,6 @@ from vskernels import BorderHandling
 from vsexprtools import norm_expr
 from vstools import vs
 
-from .base import descale_rescale
-
 __all__ = ["border_clipping_mask"]
 
 
@@ -24,7 +22,7 @@ def border_clipping_mask(
         height=scaling_args.height if scaling_args.mode == "h" else clip.height,
     )
 
-    blank = descale_rescale(
+    blank = kernel.rescale(
         clip.std.BlankClip(length=1, color=0.5, keep=True, **size_args),
         kernel,
         width=clip.width,

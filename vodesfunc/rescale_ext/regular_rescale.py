@@ -2,7 +2,7 @@ from vstools import vs, KwargsT
 from vskernels import BorderHandling
 from vsscale import ScalingArgs
 
-from .base import RescaleBase, descale_rescale
+from .base import RescaleBase
 from .ignoremask import border_clipping_mask
 
 __all__ = ["RescBuildNonFB"]
@@ -42,7 +42,7 @@ class RescBuildNonFB(RescaleBase):
             if not callable(self.ignore_mask):
                 self.ignore_mask = border_clipping_mask
 
-            def _descale_step(workclip: vs.VideoNode, sc_args: ScalingArgs, order: str) -> vs.VideoNode:
+            def _descale_step(workclip: vs.VideoNode, order: str) -> vs.VideoNode:
                 sc_args_direction = ScalingArgs.from_args(
                     clip, height=height, width=width, base_height=base_height, base_width=base_width, src_top=shift[0], src_left=shift[1], mode=order
                 )
@@ -58,10 +58,10 @@ class RescBuildNonFB(RescaleBase):
             out_width, out_height = sc_args.width, sc_args.height
 
             for order in mode.lower():
-                self.descaled = _descale_step(self.descaled, sc_args, order)
+                self.descaled = _descale_step(self.descaled, order)
         else:
             self.descaled = self.kernel.descale(clip, **args)
 
-        self.rescaled = descale_rescale(
-            self.descaled, self.kernel, **(self.rescale_args | dict(width=clip.width, height=clip.height, border_handling=self.border_handling))
+        self.rescaled = self.kernel.rescale(
+            self.descaled, **(self.rescale_args | dict(width=clip.width, height=clip.height, border_handling=self.border_handling))
         )
