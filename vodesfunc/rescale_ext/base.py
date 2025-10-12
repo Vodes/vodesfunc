@@ -1,5 +1,5 @@
 from vstools import FunctionUtil, KwargsT, vs, FieldBasedT, core, vs_object
-from vskernels import Kernel, Bilinear, Bicubic, Lanczos, BorderHandling
+from vskernels import Kernel, BorderHandling
 from vsscale import ScalingArgs
 from typing import Self, MutableMapping, TYPE_CHECKING, Callable
 from abc import abstractmethod
