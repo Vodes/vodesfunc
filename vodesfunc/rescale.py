@@ -1,5 +1,5 @@
+from jetpytools import CustomValueError
 from vstools import (
-    CustomValueError,
     FieldBased,
     FieldBasedT,
     FrameRangesN,

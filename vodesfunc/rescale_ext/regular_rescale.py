@@ -1,4 +1,5 @@
-from vstools import vs, KwargsT
+from jetpytools import KwargsT
+from vstools import vs
 from vskernels import BorderHandling
 from vsscale import ScalingArgs
 

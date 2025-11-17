@@ -1,5 +1,6 @@
 from typing import Sequence, Callable
-from vstools import vs, core, get_depth, scale_value, split, normalize_seq, get_neutral_value, get_peak_value, mod4
+from jetpytools import normalize_seq, mod4
+from vstools import vs, core, get_depth, scale_value, split, get_neutral_value, get_peak_value
 from vskernels import Scaler, Lanczos, Bicubic
 
 __all__ = ["adaptive_grain", "grain", "ntype4", "itype4"]

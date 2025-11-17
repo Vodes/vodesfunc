@@ -1,4 +1,5 @@
-from vstools import vs, KwargsT, FieldBased, padder
+from jetpytools import KwargsT
+from vstools import vs, FieldBased, padder
 
 from .base import RescaleBase
 

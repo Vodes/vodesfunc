@@ -1,4 +1,5 @@
-from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, KwargsT, get_var_infos, FunctionUtil, classproperty, get_video_format
+from jetpytools import KwargsT, classproperty
+from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, get_var_infos, FunctionUtil, get_video_format
 from vsrgtools import contrasharpening
 from vsdenoise import MVToolsPreset, MotionMode, SearchMode, prefilter_to_full_range, Prefilter
 
