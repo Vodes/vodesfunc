@@ -1,4 +1,5 @@
-from vstools import vs, core, KwargsT
+from jetpytools import KwargsT
+from vstools import vs, core
 
 from functools import partial
 

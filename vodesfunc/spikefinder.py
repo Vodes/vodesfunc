@@ -1,3 +1,4 @@
+from jetpytools import SoftRange, normalize_ranges_to_list, normalize_list_to_ranges
 from vstools import (
     initialize_clip,
     finalize_clip,
@@ -7,7 +8,6 @@ from vstools import (
     FrameRangesN,
     FrameRangeN,
 )
-from jetpytools import SoftRange, normalize_ranges_to_list, normalize_list_to_ranges
 from muxtools import get_executable, PathLike, VideoFile, warn, make_output, ensure_path_exists, info, debug
 from vsmuxtools.video.encoders import VideoEncoder
 from dataclasses import dataclass

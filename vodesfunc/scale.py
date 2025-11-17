@@ -1,8 +1,6 @@
+from jetpytools import inject_self
 from vskernels import Lanczos
-from vstools import (
-    inject_self,
-    vs,
-)
+from vstools import vs
 
 
 __all__: list[str] = ["Lanczos_PreSS"]

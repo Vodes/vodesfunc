@@ -1,4 +1,5 @@
-from vstools import FunctionUtil, KwargsT, vs, FieldBasedT, core, vs_object
+from jetpytools import KwargsT
+from vstools import FunctionUtil, vs, FieldBasedT, core, vs_object
 from vskernels import Kernel, BorderHandling
 from vsscale import ScalingArgs
 from typing import Self, MutableMapping, TYPE_CHECKING, Callable
