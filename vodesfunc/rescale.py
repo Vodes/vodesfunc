@@ -86,7 +86,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
 
         self.kernel = Kernel.ensure_obj(kernel)
         self.border_handling = self.kernel.kwargs.pop("border_handling", 0)
-        self.field_based = FieldBased.from_param(field_based) or FieldBased.from_video(clip)
+        self.field_based = FieldBased.from_param_or_video(field_based, clip)
         self.ignore_mask = self.kernel.kwargs.pop("ignore_mask", ignore_mask)
 
         self.height = height if "h" in mode else clip.height
