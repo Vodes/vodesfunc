@@ -24,7 +24,8 @@ def set_output(
         args = KwargsT(name=name, cache=cache, disable_comp=not allow_comp)
         if kwargs:
             args.update(**kwargs)
-        from vspreview import is_preview, set_output as setsu_sucks
+        from vspreview import set_output as setsu_sucks
+        from vspreview.api import is_preview
 
         if cache is None:
             cache = is_preview()
