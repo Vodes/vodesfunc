@@ -4,19 +4,8 @@ from vsrgtools import contrasharpening
 from vsdenoise import MVToolsPreset, MotionMode, SearchMode, prefilter_to_full_range, Prefilter
 
 from inspect import signature
-from importlib.metadata import version as fetch_version
-from packaging.version import Version
 
 __all__ = ["VMDegrain", "schizo_denoise", "MVPresets"]
-
-
-def check_jetpack_version() -> bool:
-    jetpack_version = Version(fetch_version("vsjetpack"))
-    if jetpack_version >= Version("0.3.0"):
-        if jetpack_version < Version("0.3.2"):
-            print("Please update vsjetpack to atleast 0.3.2 if you want to use 0.3.X. There are some necessary repair fixes on it.")
-        return True
-    return False
 
 
 class MVPresets:
@@ -52,16 +41,6 @@ class MVPresets:
             recalculate_args=RecalculateArgs(truemotion=MotionMode.SAD, search=SearchMode.ONETIME, searchparam=0),
         )
 
-    @classproperty
-    def Default(self) -> MVToolsPreset | None:
-        """
-        Returns `MVPresets.MaybeNotTerrible` if used on a version where mc_degrain is available.
-        Otherwise `None`.
-        """
-        if check_jetpack_version():
-            return MVPresets.MaybeNotTerrible
-        return None
-
 
 def VMDegrain(
     src: vs.VideoNode,
@@ -72,7 +51,7 @@ def VMDegrain(
     overlap: int | None = None,
     refine: int = 2,
     tr: int = 2,
-    preset: MVToolsPreset | None = MVPresets.Default,
+    preset: MVToolsPreset = MVPresets.MaybeNotTerrible,
     **kwargs: KwargsT,
 ) -> vs.VideoNode:
     """
@@ -107,20 +86,20 @@ def VMDegrain(
 
     from vsdenoise import mc_degrain
 
-    if preset is None:
-        raise ValueError("VMDegrain: preset cannot be None when on vsjetpack>=0.3.0!")
-
     # Dirty clean up for random args getting removed from on git.
     # (You should not be using git jetpack with vodesfunc but it is what it is)
     mc_degrain_sig = signature(mc_degrain)
-    args = KwargsT(
-        prefilter=prefilter,
-        thsad=thSAD,
-        thsad_recalc=thSAD,
-        blksize=block_size,
-        refine=refine,
-        preset=preset,
-        tr=tr,
+    args = (
+        KwargsT(
+            prefilter=prefilter,
+            thsad=thSAD,
+            thsad_recalc=thSAD,
+            blksize=block_size,
+            refine=refine,
+            preset=preset,
+            tr=tr,
+        )
+        | kwargs
     )
     clean_args = {k: v for k, v in args.items() if k in mc_degrain_sig.parameters}
 
