@@ -5,9 +5,9 @@ version = "1.10.0"
 description = "Vodes' random Vapoursynth Functions."
 authors = [{ name = "Vodes", email = "vodes.imp@gmail.com" }]
 dependencies = [
-    "Vapoursynth>=66",
+    "Vapoursynth>=67",
     "vsmuxtools>=0.3.0",
-    "vsjetpack>=0.5.3",
+    "vsjetpack>=0.7.0",
     "jetpytools>=1.2.3",
     "packaging>=23.2"
 ]

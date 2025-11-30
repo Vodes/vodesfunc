@@ -17,7 +17,7 @@ class Lanczos_PreSS(Lanczos):
     def scale(self, clip: vs.VideoNode, width: int, height: int, shift: tuple[float, float] = (0, 0), **kwargs) -> vs.VideoNode:
         if width != clip.width * 2 or height != clip.height * 2:
             raise ValueError("Lanczos_PreSS: You're probably not using this correctly.")
-        return Lanczos.scale(clip, width, height, (-0.25, -0.25))
+        return Lanczos().scale(clip, width, height, (-0.25, -0.25))
 
 
 def mod_padding(clip: vs.VideoNode, mod: int = 4, min: int = 4):

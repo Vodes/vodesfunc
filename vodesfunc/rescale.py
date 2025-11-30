@@ -1,7 +1,7 @@
 from jetpytools import CustomValueError
 from vstools import (
     FieldBased,
-    FieldBasedT,
+    FieldBasedLike,
     FrameRangesN,
     FunctionUtil,
     GenericVSFunction,
@@ -12,7 +12,7 @@ from vstools import (
     vs,
 )
 from vskernels import KernelLike, Kernel, ScalerLike, Bilinear, Hermite, Scaler
-from vsmasktools import EdgeDetectT, EdgeDetect, KirschTCanny
+from vsmasktools import EdgeDetectLike, EdgeDetect, Kirsch
 from vsmasktools import Morpho, XxpandMode
 from vsexprtools import norm_expr
 from vsrgtools import remove_grain
@@ -57,7 +57,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         base_height: int | None = None,
         base_width: int | None = None,
         shift: tuple[float, float] = (0, 0),
-        field_based: FieldBasedT | None = None,
+        field_based: FieldBasedLike | None = None,
         ignore_mask: bool | vs.VideoNode | Ignore_Mask_Func = False,
         mode: str = "hw",
     ) -> Self:
@@ -128,7 +128,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
 
     def linemask(
         self,
-        mask: vs.VideoNode | EdgeDetectT | None = None,
+        mask: vs.VideoNode | EdgeDetectLike | None = None,
         downscaler: ScalerLike | None = None,
         maximum_iter: int = 0,
         inflate_iter: int = 0,
@@ -139,7 +139,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         """
         A function to apply a linemask to the final output.
 
-        :param mask:            This can be a masking function like `KirschTCanny` (also the default if `None`) or a clip.
+        :param mask:            This can be a masking function like `Kirsch` (also the default if `None`) or a clip.
         :param downscaler:      Downscaler to use if creating a linemask on the doubled clip. Defaults to `Bilinear` if `None`.
         :param maximum_iter:    Apply std.Maximum x amount of times
         :param inflate_iter:    Apply std.inflate x amount of times
@@ -153,7 +153,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         if isinstance(mask, vs.VideoNode):
             self.linemask_clip = mask
             return self
-        edgemaskFunc = EdgeDetect.ensure_obj(mask or KirschTCanny())
+        edgemaskFunc = EdgeDetect.ensure_obj(mask or Kirsch())
 
         # Perform on doubled clip if exists and downscale
         if self.doubled:

@@ -1,5 +1,5 @@
 from jetpytools import KwargsT
-from vstools import FunctionUtil, vs, FieldBasedT, core, vs_object
+from vstools import FunctionUtil, vs, FieldBasedLike, core, vs_object
 from vskernels import Kernel, BorderHandling
 from vsscale import ScalingArgs
 from typing import Self, MutableMapping, TYPE_CHECKING, Callable
@@ -24,7 +24,7 @@ class RescaleBase(RescaleNumbers, vs_object):
     post_crop: KwargsT
     rescale_args: KwargsT
     descale_func_args: KwargsT
-    field_based: FieldBasedT | None = None
+    field_based: FieldBasedLike | None = None
     ignore_mask: bool | vs.VideoNode | Ignore_Mask_Func
 
     descaled: vs.VideoNode
