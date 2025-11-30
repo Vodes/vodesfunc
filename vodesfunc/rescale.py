@@ -4,7 +4,7 @@ from vstools import (
     FieldBasedLike,
     FrameRangesN,
     FunctionUtil,
-    GenericVSFunction,
+    VSFunctionNoArgs,
     core,
     get_video_format,
     limiter,
@@ -16,6 +16,7 @@ from vsmasktools import EdgeDetectLike, EdgeDetect, Kirsch
 from vsmasktools import Morpho, XxpandMode
 from vsexprtools import norm_expr
 from vsrgtools import remove_grain
+from vsdenoise import prefilter_to_full_range
 from vsscale import ArtCNN
 from typing import Self
 import inspect
@@ -107,7 +108,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
 
         return self
 
-    def post_descale(self, func: GenericVSFunction | list[GenericVSFunction]) -> Self:
+    def post_descale(self, func: VSFunctionNoArgs | list[VSFunctionNoArgs]) -> Self:
         """
         A function to apply any arbitrary function on the descaled clip.\n
         I can't think of a good usecase/example for this but I was asked to add this before.
@@ -134,6 +135,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         inflate_iter: int = 0,
         expand: int | tuple[int, int | None] = 0,
         kernel_window: int | None = None,
+        prefilter: bool | VSFunctionNoArgs = False,
         **kwargs,
     ) -> Self:
         """
@@ -146,6 +148,8 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         :param expand:          Apply an ellipse morpho expand with the passed amount.
                                 Can be a tuple of (horizontal, vertical) or a single value for both.
         :param kernel_window:   To override kernel radius used in case of border_handling being used.
+        :param prefilter:       Prefilter the input clip for the mask function.\n
+                                `True` will call `prefilter_to_full_range`. `False` to disable.
         :param **kwargs:        Any other params to pass to the edgemask creation. For example `lthr` or `hthr`.
         """
         if self.upscaled:
@@ -156,12 +160,17 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         edgemaskFunc = EdgeDetect.ensure_obj(mask or Kirsch())
 
         # Perform on doubled clip if exists and downscale
+
+        wclip = self.doubled if self.doubled else self.funcutil.work_clip
+        if prefilter:
+            wclip = prefilter_to_full_range(wclip) if not callable(prefilter) else prefilter(wclip)
+
         if self.doubled:
-            scaler = Bilinear.ensure_obj(downscaler)
-            self.linemask_clip = edgemaskFunc.edgemask(self.doubled, **kwargs)
+            scaler = Scaler.ensure_obj(downscaler or Bilinear())
+            self.linemask_clip = edgemaskFunc.edgemask(wclip, **kwargs)
             self.linemask_clip = scaler.scale(self.linemask_clip, self.funcutil.work_clip.width, self.funcutil.work_clip.height, **self.post_crop)
         else:
-            self.linemask_clip = edgemaskFunc.edgemask(self.funcutil.work_clip, **kwargs)
+            self.linemask_clip = edgemaskFunc.edgemask(wclip, **kwargs)
 
         self.linemask_clip = self._process_mask(self.linemask_clip, maximum_iter, inflate_iter, expand)
 
@@ -233,7 +242,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         self.doubled = scaler.supersample(self.descaled)
         return self
 
-    def post_double(self, func: GenericVSFunction | list[GenericVSFunction]) -> Self:
+    def post_double(self, func: VSFunctionNoArgs | list[VSFunctionNoArgs]) -> Self:
         """
         A function to apply any arbitrary function on the doubled clip.
 
