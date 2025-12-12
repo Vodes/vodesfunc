@@ -1,7 +1,7 @@
 from jetpytools import KwargsT, classproperty
-from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, get_var_infos, FunctionUtil, get_video_format
+from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, get_var_infos, FunctionUtil, get_video_format, Planes
 from vsrgtools import contrasharpening
-from vsdenoise import MVToolsPreset, MotionMode, SearchMode, prefilter_to_full_range, Prefilter
+from vsdenoise import MVToolsPreset, MotionMode, SearchMode, prefilter_to_full_range, Prefilter, MVTools, mc_clamp
 
 from inspect import signature
 
@@ -52,8 +52,9 @@ def VMDegrain(
     refine: int = 2,
     tr: int = 2,
     preset: MVToolsPreset = MVPresets.MaybeNotTerrible,
+    planes: Planes = 0,
     **kwargs: KwargsT,
-) -> vs.VideoNode:
+) -> tuple[vs.VideoNode, MVTools]:
     """
     Just some convenience function for mvtools with a useable preset and temporal smoothing.\n
     Check the MVTools Docs for the params that aren't listed below.\n
@@ -67,7 +68,7 @@ def VMDegrain(
     if isinstance(prefilter, int):
         prefilter = Prefilter(prefilter)
 
-    futil = FunctionUtil(src, VMDegrain, 0, vs.YUV, 16)
+    futil = FunctionUtil(src, VMDegrain, color_family=[vs.YUV, vs.GRAY], bitdepth=16)
 
     if any([block_size, overlap]) and not all([block_size, overlap]):
         raise ValueError("VMDegrain: If you want to play around with blocksize, overlap or refine, you have to set all of them.")
@@ -89,30 +90,29 @@ def VMDegrain(
     # Dirty clean up for random args getting removed from on git.
     # (You should not be using git jetpack with vodesfunc but it is what it is)
     mc_degrain_sig = signature(mc_degrain)
-    args = (
-        KwargsT(
-            prefilter=prefilter,
-            thsad=thSAD,
-            thsad_recalc=thSAD,
-            blksize=block_size,
-            refine=refine,
-            preset=preset,
-            tr=tr,
-        )
-        | kwargs
+    args = KwargsT(
+        prefilter=prefilter,
+        thsad=thSAD,
+        thsad_recalc=thSAD,
+        blksize=block_size,
+        refine=refine,
+        preset=preset,
+        planes=planes,
+        tr=tr,
     )
+    args = args | kwargs
+
     clean_args = {k: v for k, v in args.items() if k in mc_degrain_sig.parameters}
 
     if len(args) != len(clean_args):
         args_string = ", ".join(list(k for k, _ in args.items() if k not in clean_args))
         print(f"VMDegrain: A couple of arguments are not passed to mc_degrain anymore! ({args_string})\nPlease do report this to the maintainer.")
-
-    out = mc_degrain(futil.work_clip, **clean_args)
+    out, mv = mc_degrain(futil.work_clip, export_globals=True, **clean_args)
 
     if smooth:
         out = core.zsmooth.TTempSmooth(out, maxr=1, thresh=1, mdiff=0, strength=1)
 
-    return futil.return_clip(out)
+    return (futil.return_clip(out), mv)
 
 
 def schizo_denoise(
