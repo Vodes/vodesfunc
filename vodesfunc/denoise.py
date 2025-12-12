@@ -4,6 +4,7 @@ from vsrgtools import contrasharpening
 from vsdenoise import MVToolsPreset, MotionMode, SearchMode, prefilter_to_full_range, Prefilter, MVTools, mc_clamp
 
 from inspect import signature
+from typing import Callable
 
 __all__ = ["VMDegrain", "schizo_denoise", "MVPresets"]
 
@@ -123,7 +124,7 @@ def schizo_denoise(
     nlm_a: int = 2,
     prefilter: vs.VideoNode | int = 2,
     cuda: bool | list[bool] = True,
-    csharp: int | bool = False,
+    csharp: int | bool | Callable[[vs.VideoNode, vs.VideoNode, MVTools], vs.VideoNode] = False,
     **kwargs,
 ) -> vs.VideoNode:
     """
@@ -140,7 +141,10 @@ def schizo_denoise(
                         Defaults to MINBLUR3
     :param cuda:        Uses NlmCuda and BM3DCuda respectively if available. The latter prefers RTC if available.
                         Will fallback to BM3DHip if installed and no cuda available.
-    :param csharp:      Apply contrasharpening after denoising. True defaults to 3 while False obviously disables it.
+    :param csharp:      Apply contrasharpening after denoising.\n
+                        True defaults to [mc_clamp](https://jaded-encoding-thaumaturgy.github.io/vs-jetpack/api/vsdenoise/funcs#vsdenoise.funcs.mc_clamp) while False obviously disables it.\n
+                        Integers are passed to the usual [contrasharpening](https://jaded-encoding-thaumaturgy.github.io/vs-jetpack/api/vsrgtools/contra#vsrgtools.contra.contrasharpening) function.\n
+                        The callable inputs are filtered, source and mvtools globals.
     :param kwargs:      Any parameters you might wanna pass to bm3d or mvtools.\n
                         Note that this also takes `tr` or `preset` for mvtools which might be very useful.
 
@@ -184,8 +188,8 @@ def schizo_denoise(
         fast=kwargs.pop("fast", True),
     )
 
-    y = get_y(clip)
-    mv = VMDegrain(y, thSAD, prefilter, **kwargs)
+    mv, mv_globals = VMDegrain(clip, thSAD, prefilter, **kwargs)
+    mv = get_y(mv)
 
     has_cuda = hasattr(core, "bm3dcuda") or hasattr(core, "bm3dcuda_rtc")
     has_hip = hasattr(core, "bm3dhip")
@@ -199,10 +203,16 @@ def schizo_denoise(
         bm3dargs.pop("fast")
         bm3dfunc = core.bm3dcpu
 
+    y = get_y(clip)
     bm3d = bm3dfunc.BM3Dv2(depth(y, 32), depth(mv, 32), sigma[0], radius=radius[0], **bm3dargs)
 
     out = join(depth(bm3d, 16), nlm)  # type: ignore
     out = depth(out, get_depth(src))
     if csharp != False:  # noqa: E712
-        out = contrasharpening(out, src, mode=3 if csharp == True else csharp)  # noqa: E712
+        if callable(csharp):
+            out = csharp(out, src, mv_globals)
+        elif csharp == True:  # noqa: E712
+            out = mc_clamp(out, src, mv_globals, tr=kwargs.get("tr", 2))
+        else:
+            out = contrasharpening(out, src, mode=csharp)
     return out.std.CopyFrameProps(src)
