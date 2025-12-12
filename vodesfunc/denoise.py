@@ -110,7 +110,7 @@ def VMDegrain(
     out = mc_degrain(futil.work_clip, **clean_args)
 
     if smooth:
-        out = out.ttmpsm.TTempSmooth(maxr=1, thresh=1, mdiff=0, strength=1)
+        out = core.zsmooth.TTempSmooth(out, maxr=1, thresh=1, mdiff=0, strength=1)
 
     return futil.return_clip(out)
 
