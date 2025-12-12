@@ -1,6 +1,6 @@
 from jetpytools import KwargsT
 from vstools import FunctionUtil, vs, FieldBasedLike, core, vs_object
-from vskernels import Kernel, BorderHandling
+from vskernels import Kernel, BorderHandling, SampleGridModel
 from vsscale import ScalingArgs
 from typing import Self, MutableMapping, TYPE_CHECKING, Callable
 from abc import abstractmethod
@@ -25,6 +25,7 @@ class RescaleBase(RescaleNumbers, vs_object):
     rescale_args: KwargsT
     descale_func_args: KwargsT
     field_based: FieldBasedLike | None = None
+    sample_grid_model: SampleGridModel = SampleGridModel.MATCH_EDGES
     ignore_mask: bool | vs.VideoNode | Ignore_Mask_Func
 
     descaled: vs.VideoNode

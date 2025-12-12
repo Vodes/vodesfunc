@@ -11,7 +11,7 @@ from vstools import (
     replace_ranges,
     vs,
 )
-from vskernels import KernelLike, Kernel, ScalerLike, Bilinear, Hermite, Scaler
+from vskernels import KernelLike, Kernel, ScalerLike, Bilinear, Hermite, Scaler, SampleGridModel
 from vsmasktools import EdgeDetectLike, EdgeDetect, Kirsch
 from vsmasktools import Morpho, XxpandMode
 from vsexprtools import norm_expr
@@ -60,6 +60,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         shift: tuple[float, float] = (0, 0),
         field_based: FieldBasedLike | None = None,
         ignore_mask: bool | vs.VideoNode | Ignore_Mask_Func = False,
+        sample_grid_model: SampleGridModel | int = SampleGridModel.MATCH_EDGES,
         mode: str = "hw",
     ) -> Self:
         """
@@ -89,6 +90,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         self.border_handling = self.kernel.kwargs.pop("border_handling", 0)
         self.field_based = FieldBased.from_param_or_video(field_based, clip)
         self.ignore_mask = self.kernel.kwargs.pop("ignore_mask", ignore_mask)
+        self.sample_grid_model = SampleGridModel(self.kernel.kwargs.pop("sample_grid_model", sample_grid_model))
 
         self.height = height if "h" in mode else clip.height
         self.width = width if "w" in mode else clip.width
