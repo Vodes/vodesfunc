@@ -1,4 +1,4 @@
-from vstools import vs, core, vs_object
+from vstools import vs, core, VSObject
 from vsexprtools import norm_expr
 from typing import TYPE_CHECKING, MutableMapping
 from enum import IntEnum
@@ -46,7 +46,7 @@ class RescBuildMixed(RescaleBase):
         self.upscaled = self.upscaled.std.SetFrameProp("RB_Target", self.index)
 
 
-class MixedRB(vs_object):
+class MixedRB(VSObject):
     """
     Implementation of MixedRescale for RescaleBuilder(s)
 
