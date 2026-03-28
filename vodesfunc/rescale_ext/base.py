@@ -1,5 +1,5 @@
 from jetpytools import KwargsT
-from vstools import FunctionUtil, vs, FieldBasedLike, core, vs_object
+from vstools import FunctionUtil, vs, FieldBasedLike, core, VSObject
 from vskernels import Kernel, BorderHandling, SampleGridModel
 from vsscale import ScalingArgs
 from typing import Self, MutableMapping, TYPE_CHECKING, Callable
@@ -18,7 +18,7 @@ class RescaleNumbers:
     border_handling: int = 0
 
 
-class RescaleBase(RescaleNumbers, vs_object):
+class RescaleBase(RescaleNumbers, VSObject):
     funcutil: FunctionUtil
     kernel: Kernel
     post_crop: KwargsT
