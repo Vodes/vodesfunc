@@ -189,6 +189,7 @@ def find_spikes(
     final_ranges = normalize_list_to_ranges(ranges_int)
 
     if export_file:
+        out_file.parent.mkdir(exist_ok=True)
         with open(out_file, "w", encoding="utf-8") as writer:
             all_nums = list[int]()
             for start, end in final_ranges:
