@@ -80,3 +80,57 @@ class RescBuildNonFB(RescaleBase):
         self.rescaled = self.kernel.rescale(
             self.descaled, **(self.rescale_args | dict(width=clip.width, height=clip.height, border_handling=self.border_handling))
         )
+
+    def _raw_non_fieldbased_descale(
+        self,
+        clip: vs.VideoNode,
+        width: int,
+        height: int,
+        src_left: float | None = None,
+        src_top: float | None = None,
+        src_width: float | None = None,
+        src_height: float | None = None,
+        mode: str = "hw",
+    ) -> None:
+        sc_args = ScalingArgs(width, height, src_width, src_height, src_top, src_left, mode)
+
+        args = KwargsT(width=sc_args.width, height=sc_args.height, border_handling=self.border_handling) | sc_args.kwargs()
+
+        if isinstance(self.ignore_mask, vs.VideoNode):
+            args = args | dict(ignore_mask=self.ignore_mask)
+
+        self.post_crop = sc_args.kwargs(2)
+        self.rescale_args = sc_args.kwargs()
+
+        self.descale_func_args = KwargsT() | args
+
+        self.height = args.get("src_height", clip.height)
+        self.width = args.get("src_width", clip.width)
+        self.base_height = clip.height + 2  # Not sure what to do with these, they're only used for cropping the linemask with borderhandling
+        self.base_width = clip.width + 2
+
+        if self.ignore_mask and not isinstance(self.ignore_mask, vs.VideoNode) and mode.lower() in ("wh", "hw"):
+            if not callable(self.ignore_mask):
+                self.ignore_mask = border_clipping_mask
+
+            def _descale_step(workclip: vs.VideoNode, order: str) -> vs.VideoNode:
+                sc_args_direction = ScalingArgs(width, height, src_width, src_height, src_top, src_left, order)
+                ignore_mask = self.ignore_mask(workclip, sc_args_direction, self.kernel, BorderHandling(self.border_handling))  # type:ignore[reportCallableArgument]
+                direction = {"width" if order == "w" else "height": out_width if order == "w" else out_height}
+
+                return self.kernel.descale(
+                    workclip,
+                    **(sc_args_direction.kwargs() | dict(border_handling=self.border_handling, ignore_mask=ignore_mask) | direction),
+                )
+
+            self.descaled = clip
+            out_width, out_height = sc_args.width, sc_args.height
+
+            for order in mode.lower():
+                self.descaled = _descale_step(self.descaled, order)
+        else:
+            self.descaled = self.kernel.descale(clip, **args)
+
+        self.rescaled = self.kernel.rescale(
+            self.descaled, **(self.rescale_args | dict(width=clip.width, height=clip.height, border_handling=self.border_handling))
+        )

@@ -64,7 +64,7 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         mode: str = "hw",
     ) -> Self:
         """
-        Performs descale and rescale (with the same kernel).
+        Performs descale and rescale (with the same kernel) using the "traditional" getfnative approach with base_width/height for fractional descales.
 
         :param kernel:              Kernel to descale with
         :param height:              Height to descale to
@@ -78,6 +78,12 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
                                     "h" or "w" respectively for the former two.
         :param field_based:         To descale a cross-converted/interlaced clip.
                                     Will try to take the prop from the clip if `None` was passed.
+        :param ignore_mask:         Manual mask of areas to ignore in the descale process. This is most commonly used to avoid clipping.\n
+                                    `True` will generate a mask to avoid clipping on borders. This is implemented in `border_clipping_mask` in this package.\n
+                                    You can also pass your own function to generate a mask using all arguments and for both steps.\n
+                                    See the aforementioned function for how this works.
+        :param sample_grid_model:   See the [vs-jetpack docs](https://jaded-encoding-thaumaturgy.github.io/vs-jetpack/api/vskernels/types/#vskernels.types.SampleGridModel) for this.\n
+                                    This param will only be used as a fallback if the kernel doesn't have one passed to it.
         """
         clip = self.funcutil.work_clip
 
@@ -104,6 +110,51 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
             self._fieldbased_descale(clip, width=self.width, height=self.height, shift=shift, border_handling=self.border_handling)
         else:
             self._non_fieldbased_descale(clip, width, height, base_height, base_width, shift, mode)
+
+        self.descaled = self.descaled.std.CopyFrameProps(clip)
+        self.rescaled = self.rescaled.std.CopyFrameProps(clip)
+
+        return self
+
+    def descale_raw(
+        self,
+        kernel: KernelLike,
+        width: int,
+        height: int,
+        src_left: float | None = None,
+        src_top: float | None = None,
+        src_width: float | None = None,
+        src_height: float | None = None,
+        mode: str = "hw",
+        ignore_mask: bool | vs.VideoNode | Ignore_Mask_Func = False,
+    ) -> Self:
+        """
+        Performs descale and rescale (with the same kernel) using raw src_* values directly.
+
+        :param kernel:              Kernel to descale with.\n
+                                    If you want `border_handling`, pass that as a parameter to the kernel.
+        :param height:              Height to descale to
+        :param width:               Width to descale to. Please be absolutely certain of what you're doing if you're using get_w for this.
+        :param src_left:            Used to select the source region of the input to use. Can also be used to shift the image. Defaults to the whole image.
+        :param src_top:             See above.
+        :param src_width:           See above.
+        :param src_height:          See above.
+        :param mode:                Whether to descale only height, only width, or both.
+                                    "h" or "w" respectively for the former two.
+        :param ignore_mask:         Manual mask of areas to ignore in the descale process. This is most commonly used to avoid clipping.\n
+                                    `True` will generate a mask to avoid clipping on borders. This is implemented in `border_clipping_mask` in this package.\n
+                                    You can also pass your own function to generate a mask using all arguments and for both steps.\n
+                                    See the aforementioned function for how this works.
+        """
+        clip = self.funcutil.work_clip
+
+        self.kernel = Kernel.ensure_obj(kernel)
+        self.border_handling = self.kernel.kwargs.pop("border_handling", 0)
+        self.ignore_mask = self.kernel.kwargs.pop("ignore_mask", ignore_mask)
+        self.field_based = FieldBased.PROGRESSIVE  # otherwise currently unsupported
+        self.sample_grid_model = SampleGridModel.MATCH_EDGES  # otherwise currently (?) unsupported
+
+        self._raw_non_fieldbased_descale(clip, width, height, src_left, src_top, src_width, src_height, mode)
 
         self.descaled = self.descaled.std.CopyFrameProps(clip)
         self.rescaled = self.rescaled.std.CopyFrameProps(clip)
