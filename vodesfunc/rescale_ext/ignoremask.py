@@ -24,9 +24,8 @@ def border_clipping_mask(
 
     blank = kernel.rescale(
         clip.std.BlankClip(length=1, color=0.5, keep=True, **size_args),
-        kernel,
-        width=clip.width,
-        height=clip.height,
+        clip.width,
+        clip.height,
         border_handling=int(border_handling),
         **scaling_args.kwargs(),
     )
