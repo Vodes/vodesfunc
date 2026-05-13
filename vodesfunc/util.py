@@ -2,7 +2,9 @@ from jetpytools import KwargsT
 from vstools import vs, core
 
 from functools import partial
+from typing import Any
 from vsmuxtools import src_file
+import sys
 
 from contextlib import suppress
 
@@ -19,11 +21,11 @@ def set_output(
     frame_info: bool = False,
     allow_comp: bool = True,
     cache: bool | None = None,
-    **kwargs: KwargsT,
+    **kwargs: Any,
 ) -> vs.VideoNode:
     """
     Outputs a clip. Less to type.
-    If you're using vsview, cache is irrelevant and allow_comp is unfortunately not a thing right now.
+    If you're using vsview, cache is a no-op.
     """
     if isinstance(clip, src_file):
         clip = clip.src_cut
@@ -33,21 +35,19 @@ def set_output(
 
     is_preview_vsview = False
     with suppress(ImportError):
-        from vsview import is_preview as vsv_is_preview
+        from vsview.api.info import is_preview as vsv_is_preview
 
         is_preview_vsview = vsv_is_preview()
 
         if is_preview_vsview:
             from vsview import set_output as vsv_out
 
-            vsv_out(clip, name, **kwargs)
+            vsv_out(clip, name, allow_comp=allow_comp, **kwargs)
             return clip
 
     is_preview_vspreview = False
     with suppress(ImportError):
-        from vspreview.api import is_preview as vsp_is_preview
-
-        is_preview_vspreview = vsp_is_preview()
+        is_preview_vspreview = bool(sys.modules.get("__vspreview__"))
 
         if is_preview_vspreview:
             from vspreview.api import set_output as vsp_out
