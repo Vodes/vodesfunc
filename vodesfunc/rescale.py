@@ -93,10 +93,10 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
                 print("RescaleBuilder: Please make sure get_w returns the width you really want!")
 
         self.kernel = Kernel.ensure_obj(kernel)
-        self.border_handling = self.kernel.kwargs.pop("border_handling", 0)
+        self.border_handling = self.kernel.kwargs.get("border_handling", 0)
         self.field_based = FieldBased.from_param_or_video(field_based, clip)
-        self.ignore_mask = self.kernel.kwargs.pop("ignore_mask", ignore_mask)
-        self.sample_grid_model = SampleGridModel(self.kernel.kwargs.pop("sample_grid_model", sample_grid_model))
+        self.ignore_mask = self.kernel.kwargs.get("ignore_mask", ignore_mask)
+        self.sample_grid_model = SampleGridModel(self.kernel.kwargs.get("sample_grid_model", sample_grid_model))
 
         self.height = height if "h" in mode else clip.height
         self.width = width if "w" in mode else clip.width
@@ -149,8 +149,8 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
         clip = self.funcutil.work_clip
 
         self.kernel = Kernel.ensure_obj(kernel)
-        self.border_handling = self.kernel.kwargs.pop("border_handling", 0)
-        self.ignore_mask = self.kernel.kwargs.pop("ignore_mask", ignore_mask)
+        self.border_handling = self.kernel.kwargs.get("border_handling", 0)
+        self.ignore_mask = self.kernel.kwargs.get("ignore_mask", ignore_mask)
         self.field_based = FieldBased.PROGRESSIVE  # otherwise currently unsupported
         self.sample_grid_model = SampleGridModel.MATCH_EDGES  # otherwise currently (?) unsupported
 

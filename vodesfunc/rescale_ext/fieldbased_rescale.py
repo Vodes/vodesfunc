@@ -1,4 +1,5 @@
 from jetpytools import KwargsT
+from typing import Any
 from vstools import vs, FieldBased, padder
 
 from .base import RescaleBase
@@ -7,7 +8,7 @@ __all__ = ["RescBuildFB"]
 
 
 class RescBuildFB(RescaleBase):
-    def _fieldbased_descale(self, clip: vs.VideoNode, shift: tuple[float, float] = (0, 0), **descale_args: KwargsT) -> None:
+    def _fieldbased_descale(self, clip: vs.VideoNode, shift: tuple[float, float] = (0, 0), **descale_args: Any) -> None:
         clip = self.field_based.apply(clip)
         if shift != (0, 0):
             descale_args.update({"shift": shift})
@@ -50,6 +51,7 @@ class RescBuildFB(RescaleBase):
                 shift=shift,
                 src_width=src_width - (wclip.width - self.width),
                 src_height=src_height - (wclip.height - self.height),
+                border_handling=0,
             )
         self.descaled = FieldBased.PROGRESSIVE.apply(self.descaled)
         self.rescaled = FieldBased.PROGRESSIVE.apply(self.rescaled)

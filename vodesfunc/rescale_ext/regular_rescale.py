@@ -1,4 +1,5 @@
 from jetpytools import KwargsT
+from typing import Any
 from vstools import vs
 from vskernels import BorderHandling
 from vsscale import ScalingArgs
@@ -10,7 +11,7 @@ __all__ = ["RescBuildNonFB"]
 
 
 class RescBuildNonFB(RescaleBase):
-    def _scaling_args(self, **kwargs: KwargsT) -> ScalingArgs:
+    def _scaling_args(self, **kwargs: Any) -> ScalingArgs:
         if self.sample_grid_model:
             if "sample_grid_model" not in ScalingArgs.from_args.__annotations__:
                 raise ValueError("'sample_grid_model' is currently not supported. Please update vsjetpack.")
