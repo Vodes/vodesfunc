@@ -111,9 +111,12 @@ def VMDegrain(
     out, mv = mc_degrain(futil.work_clip, export_globals=True, **clean_args)
 
     if smooth:
-        out = core.zsmooth.TTempSmooth(out, maxr=1, thresh=1, mdiff=0, strength=1)
+        from vstools import sc_detect
 
-    return (futil.return_clip(out), mv)
+        out = sc_detect(out, 0.12) # zsmooth default, replacing misc.SCDetect
+        out = core.zsmooth.TTempSmooth(out, maxr=1, thresh=1, mdiff=0, strength=1, scthresh=-1)
+
+    return (futil.return_clip(out, src), mv)
 
 
 def schizo_denoise(
@@ -167,7 +170,7 @@ def schizo_denoise(
 
         prefilter = Prefilter(prefilter)
 
-    clip = depth(src, 16)
+    clip = depth(src, 16) if get_depth(src) < 16 else src
 
     nlmfunc = core.knlm.KNLMeansCL if not hasattr(core, "nlm_cuda") or not cuda[0] else core.nlm_cuda.NLMeans
 
@@ -206,7 +209,7 @@ def schizo_denoise(
     y = get_y(clip)
     bm3d = bm3dfunc.BM3Dv2(depth(y, 32), depth(mv, 32), sigma[0], radius=radius[0], **bm3dargs)
 
-    out = join(depth(bm3d, 16), nlm)  # type: ignore
+    out = join(depth(bm3d, get_depth(nlm)), nlm)  # type: ignore
     out = depth(out, get_depth(src))
     if csharp != False:  # noqa: E712
         if callable(csharp):
