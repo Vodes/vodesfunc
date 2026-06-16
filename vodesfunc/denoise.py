@@ -172,7 +172,16 @@ def schizo_denoise(
 
     clip = depth(src, 16) if get_depth(src) < 16 else src
 
-    nlmfunc = core.knlm.KNLMeansCL if not hasattr(core, "nlm_cuda") or not cuda[0] else core.nlm_cuda.NLMeans
+    has_nlm_cuda = hasattr(core, "nlm_cuda")
+    has_nlm_hip = hasattr(core, "nlm_hip")
+
+    if cuda[0] and (has_nlm_cuda or has_nlm_hip):
+        if has_nlm_cuda:
+            nlmfunc = core.nlm_cuda.NLMeans
+        else:
+            nlmfunc = core.nlm_hip.NLMeans
+    else:
+        nlmfunc = core.knlm.KNLMeansCL
 
     if len(sigma) == 3:
         clip_u = nlmfunc(clip, a=nlm_a, d=radius[1], h=sigma[1], channels="UV")
