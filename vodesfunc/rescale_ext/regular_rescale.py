@@ -1,7 +1,7 @@
 from jetpytools import KwargsT
 from typing import Any
 from vstools import vs
-from vskernels import BorderHandling
+from vskernels import BorderHandling, SampleGridModel
 from vsscale import ScalingArgs
 
 from .base import RescaleBase
@@ -17,6 +17,11 @@ class RescBuildNonFB(RescaleBase):
                 raise ValueError("'sample_grid_model' is currently not supported. Please update vsjetpack.")
             kwargs = kwargs | dict(sample_grid_model=self.sample_grid_model)
         return ScalingArgs.from_args(**kwargs)
+
+    def _kernel_kwargs(self, kwargs: KwargsT) -> KwargsT:
+        if self.sample_grid_model:
+            kwargs = kwargs | dict(sample_grid_model=SampleGridModel.MATCH_EDGES)
+        return kwargs
 
     def _non_fieldbased_descale(
         self,
@@ -36,6 +41,8 @@ class RescBuildNonFB(RescaleBase):
 
         if isinstance(self.ignore_mask, vs.VideoNode):
             args = args | dict(ignore_mask=self.ignore_mask)
+
+        args = self._kernel_kwargs(args)
 
         self.post_crop = sc_args.kwargs(2)
         self.rescale_args = sc_args.kwargs()
@@ -67,7 +74,9 @@ class RescBuildNonFB(RescaleBase):
 
                 return self.kernel.descale(
                     workclip,
-                    **(sc_args_direction.kwargs() | dict(border_handling=self.border_handling, ignore_mask=ignore_mask) | direction),
+                    **self._kernel_kwargs(
+                        sc_args_direction.kwargs() | dict(border_handling=self.border_handling, ignore_mask=ignore_mask) | direction
+                    ),
                 )
 
             self.descaled = clip
@@ -79,7 +88,8 @@ class RescBuildNonFB(RescaleBase):
             self.descaled = self.kernel.descale(clip, **args)
 
         self.rescaled = self.kernel.rescale(
-            self.descaled, **(self.rescale_args | dict(width=clip.width, height=clip.height, border_handling=self.border_handling))
+            self.descaled,
+            **self._kernel_kwargs(self.rescale_args | dict(width=clip.width, height=clip.height, border_handling=self.border_handling)),
         )
 
     def _raw_non_fieldbased_descale(
