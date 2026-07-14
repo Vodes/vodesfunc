@@ -83,7 +83,8 @@ class RescaleBuilder(RescBuildFB, RescBuildNonFB, RescBuildMixed):
                                     You can also pass your own function to generate a mask using all arguments and for both steps.\n
                                     See the aforementioned function for how this works.
         :param sample_grid_model:   See the [vs-jetpack docs](https://jaded-encoding-thaumaturgy.github.io/vs-jetpack/api/vskernels/types/#vskernels.types.SampleGridModel) for this.\n
-                                    This param will only be used as a fallback if the kernel doesn't have one passed to it.
+                                    This param will only be used as a fallback if the kernel doesn't have one passed to it.\n
+                                    Do note that this will always show up as `MATCH_EDGES` in `descale_func_args` and `rescale_args` since shifts are handled internally in ScalingArgs.
         """
         clip = self.funcutil.work_clip
 
