@@ -1,10 +1,10 @@
 from jetpytools import KwargsT, classproperty
 from vstools import vs, core, get_y, get_u, get_v, depth, get_depth, join, get_var_infos, FunctionUtil, get_video_format, Planes
 from vsrgtools import contrasharpening
-from vsdenoise import MVToolsPreset, MotionMode, SearchMode, prefilter_to_full_range, Prefilter, MVTools, mc_clamp
+from vsdenoise import MVToolsPreset, SearchMode, prefilter_to_full_range, Prefilter, MVTools, mc_clamp
 
 from inspect import signature
-from typing import Callable
+from typing import Callable, Any
 
 __all__ = ["VMDegrain", "schizo_denoise", "MVPresets"]
 
@@ -20,9 +20,9 @@ class MVPresets:
         return MVToolsPreset(
             pel=1,
             search_clip=prefilter_to_full_range,
-            super_args=SuperArgs(rfilter=RFilterMode.TRIANGLE),
-            analyze_args=AnalyzeArgs(truemotion=MotionMode.SAD, search=SearchMode.HEXAGON, pelsearch=2),
-            recalculate_args=RecalculateArgs(truemotion=MotionMode.SAD, search=SearchMode.HEXAGON, searchparam=1),
+            super_args=SuperArgs(rfilter=RFilterMode.CUBIC),
+            analyze_args=AnalyzeArgs(blksize=64, overlap_div=2, search=SearchMode.HEXAGON, pelsearch=2),
+            recalculate_args=RecalculateArgs(blksize=32, overlap_div=2, search=SearchMode.HEXAGON, searchparam=1),
         )
 
     @classproperty
@@ -37,9 +37,9 @@ class MVPresets:
             pel=1,
             pad=16,
             search_clip=prefilter_to_full_range,
-            super_args=SuperArgs(rfilter=RFilterMode.TRIANGLE),
-            analyze_args=AnalyzeArgs(truemotion=MotionMode.SAD, search=SearchMode.DIAMOND, pelsearch=2),
-            recalculate_args=RecalculateArgs(truemotion=MotionMode.SAD, search=SearchMode.ONETIME, searchparam=0),
+            super_args=SuperArgs(rfilter=RFilterMode.CUBIC),
+            analyze_args=AnalyzeArgs(blksize=64, overlap_div=2, search=SearchMode.DIAMOND, pelsearch=2),
+            recalculate_args=RecalculateArgs(blksize=32, overlap_div=2, search=SearchMode.DIAMOND, searchparam=0),
         )
 
 
@@ -49,12 +49,11 @@ def VMDegrain(
     prefilter: vs.VideoNode | int = 2,
     smooth: bool = True,
     block_size: int | None = None,
-    overlap: int | None = None,
     refine: int = 2,
     tr: int = 2,
     preset: MVToolsPreset = MVPresets.MaybeNotTerrible,
     planes: Planes = 0,
-    **kwargs: KwargsT,
+    **kwargs: Any,
 ) -> tuple[vs.VideoNode, MVTools]:
     """
     Just some convenience function for mvtools with a useable preset and temporal smoothing.\n
@@ -71,20 +70,14 @@ def VMDegrain(
 
     futil = FunctionUtil(src, VMDegrain, color_family=[vs.YUV, vs.GRAY], bitdepth=16)
 
-    if any([block_size, overlap]) and not all([block_size, overlap]):
-        raise ValueError("VMDegrain: If you want to play around with blocksize, overlap or refine, you have to set all of them.")
-
-    if not block_size or not overlap:
+    if not block_size:
         _, width, height = get_var_infos(src)
         if width <= 1024 and height <= 576:
             block_size = 32
-            overlap = 16
         elif width <= 2048 and height <= 1536:
             block_size = 64
-            overlap = 32
         else:
             block_size = 128
-            overlap = 64
 
     from vsdenoise import mc_degrain
 
@@ -166,8 +159,6 @@ def schizo_denoise(
         cuda = [cuda, cuda]
 
     if isinstance(prefilter, int):
-        from vsdenoise import Prefilter
-
         prefilter = Prefilter(prefilter)
 
     clip = depth(src, 16) if get_depth(src) < 16 else src
