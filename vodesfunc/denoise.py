@@ -163,23 +163,24 @@ def schizo_denoise(
 
     clip = depth(src, 16) if get_depth(src) < 16 else src
 
-    has_nlm_cuda = hasattr(core, "nlm_cuda")
-    has_nlm_hip = hasattr(core, "nlm_hip")
-
-    if cuda[0] and (has_nlm_cuda or has_nlm_hip):
-        if has_nlm_cuda:
-            nlmfunc = core.nlm_cuda.NLMeans
-        else:
-            nlmfunc = core.nlm_hip.NLMeans
+    if cuda[0] and hasattr(core, "vszipcu"):
+        nlmfunc = core.vszipcu.NLMeans
     else:
-        nlmfunc = core.knlm.KNLMeansCL
+        nlmfunc = core.vszipcl.NLMeans
+
+    nlmargs = dict(
+        a=nlm_a, 
+        d=radius[1],
+        channels="UV", 
+        num_streams=2
+    )
 
     if len(sigma) == 3:
-        clip_u = nlmfunc(clip, a=nlm_a, d=radius[1], h=sigma[1], channels="UV")
-        clip_v = nlmfunc(clip, a=nlm_a, d=radius[1], h=sigma[2], channels="UV")
+        clip_u = nlmfunc(clip, h=sigma[1], **nlmargs) # type: ignore
+        clip_v = nlmfunc(clip, h=sigma[2], **nlmargs) # type: ignore
         nlm = join(get_y(clip), get_u(clip_u), get_v(clip_v))  # type: ignore
     else:
-        clip_uv = nlmfunc(clip, a=nlm_a, d=radius[1], h=sigma[1], channels="UV")
+        clip_uv = nlmfunc(clip, h=sigma[1], **nlmargs) # type: ignore
         nlm = join(clip, clip_uv)  # type: ignore
 
     # 'Extract' possible bm3d args before passing kwargs to mvtools :)
